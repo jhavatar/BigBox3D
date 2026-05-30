@@ -8,6 +8,7 @@ import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image as SkiaImage
 import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Rect
+import org.jetbrains.skia.SamplingMode
 import org.jetbrains.skia.Surface
 import java.net.URI
 
@@ -35,9 +36,19 @@ private fun bytesToRawImage(bytes: ByteArray): RawImage {
     val info = ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL)
     val bitmap = Bitmap()
     return try {
+        // Use SamplingMode.LINEAR so the downscale matches Coil/browser bilinear quality;
+        // the default SamplingMode.DEFAULT is nearest-neighbor, which skips pixels and
+        // produces a different color distribution (and thus different cardboard palette).
         bitmap.allocPixels(info)
         Surface.makeRasterN32Premul(w, h).use { surface ->
-            surface.canvas.drawImageRect(src, Rect.makeWH(w.toFloat(), h.toFloat()))
+            surface.canvas.drawImageRect(
+                src,
+                Rect.makeWH(src.width.toFloat(), src.height.toFloat()),
+                Rect.makeWH(w.toFloat(), h.toFloat()),
+                SamplingMode.LINEAR,
+                null,
+                true,
+            )
             surface.readPixels(bitmap, 0, 0)
         }
         val pixels = bitmap.readPixels(info, w * 4, 0, 0) ?: throw ImageLoadException()
