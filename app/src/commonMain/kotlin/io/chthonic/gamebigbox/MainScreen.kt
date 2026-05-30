@@ -66,11 +66,11 @@ fun MainScreen() {
     var tesArena by remember { mutableStateOf<BoxRawImages?>(null) }
     LaunchedEffect(Unit) {
         tesArena = BoxRawImages(
-            front  = loadRawImageFromBytes(Res.readBytes("files/TESArena_front.webp")),
-            back   = loadRawImageFromBytes(Res.readBytes("files/TESArena_back.webp")),
-            left   = loadRawImageFromBytes(Res.readBytes("files/TESArena_left.webp")),
-            right  = loadRawImageFromBytes(Res.readBytes("files/TESArena_right.webp")),
-            top    = loadRawImageFromBytes(Res.readBytes("files/TESArena_top.webp")),
+            front = loadRawImageFromBytes(Res.readBytes("files/TESArena_front.webp")),
+            back = loadRawImageFromBytes(Res.readBytes("files/TESArena_back.webp")),
+            left = loadRawImageFromBytes(Res.readBytes("files/TESArena_left.webp")),
+            right = loadRawImageFromBytes(Res.readBytes("files/TESArena_right.webp")),
+            top = loadRawImageFromBytes(Res.readBytes("files/TESArena_top.webp")),
             bottom = loadRawImageFromBytes(Res.readBytes("files/TESArena_bottmo.webp")),
         )
     }
@@ -104,6 +104,7 @@ fun MainScreen() {
     ) { innerPadding ->
         val urlBoxes = remember {
             listOf<BoxTexture>(
+                // Doom 2
                 BoxTextureUrls(
                     front = "https://bigboxcollection.com/images/textures/front/Doom2.webp",
                     back = "https://bigboxcollection.com/images/textures/back/Doom2.webp",
@@ -119,8 +120,51 @@ fun MainScreen() {
                 BoxTextureUrls(
                     front = "https://bigboxcollection.com/images/textures/front/Doom2.webp",
                     back = "https://bigboxcollection.com/images/textures/back/Doom2.webp",
+                    sides = SideSource.Cardboard(),
+                    caps = CapSource.Cardboard(),
+                ),
+                BoxTextureUrls(
+                    front = "https://bigboxcollection.com/images/textures/front/Doom2.webp",
+                    back = "https://bigboxcollection.com/images/textures/back/Doom2.webp",
                     sides = SideSource.ColorFill(),
                     caps = CapSource.ColorFill(),
+                ),
+
+                // M&M 4
+                BoxTextureUrls(
+                    front = "https://bigboxcollection.com/images/textures/front/MightMagic4.webp",
+                    back = "https://bigboxcollection.com/images/textures/back/MightMagic4.webp",
+                    sides = SideSource.Explicit(
+                        left = "https://bigboxcollection.com/images/textures/left/MightMagic4.webp",
+                        right = "https://bigboxcollection.com/images/textures/right/MightMagic4.webp",
+                    ),
+                    caps = CapSource.Explicit(
+                        top = "https://bigboxcollection.com/images/textures/top/MightMagic4.webp",
+                        bottom = "https://bigboxcollection.com/images/textures/bottom/MightMagic4.webp",
+                    ),
+                ),
+                BoxTextureUrls(
+                    front = "https://bigboxcollection.com/images/textures/front/MightMagic4.webp",
+                    back = "https://bigboxcollection.com/images/textures/back/MightMagic4.webp",
+                    sides = SideSource.Cardboard(),
+                    caps = CapSource.Cardboard(),
+                ),
+                BoxTextureUrls(
+                    front = "https://bigboxcollection.com/images/textures/front/MightMagic4.webp",
+                    back = "https://bigboxcollection.com/images/textures/back/MightMagic4.webp",
+                    sides = SideSource.ColorFill(),
+                    caps = CapSource.ColorFill(),
+                ),
+
+                // Star Control
+                BoxTextureUrls(
+                    front = "https://bigboxcollection.com/images/textures/front/StarControl.webp",
+                    back = "https://bigboxcollection.com/images/textures/back/StarControl.webp",
+                    sides = SideSource.Explicit(
+                        left = "https://bigboxcollection.com/images/textures/left/StarControl.webp",
+                        right = "https://bigboxcollection.com/images/textures/right/StarControl.webp",
+                    ),
+                    caps = CapSource.Cardboard(),
                 ),
                 BoxTextureUrls(
                     front = "https://bigboxcollection.com/images/textures/front/StarControl.webp",
@@ -131,6 +175,8 @@ fun MainScreen() {
                     ),
                     caps = CapSource.ColorFill(),
                 ),
+
+                // Star Trek TNG
                 BoxTextureUrls(
                     front = "https://bigboxcollection.com/images/textures/front/StarTrekTNGFinalUnityCE.webp",
                     back = "https://bigboxcollection.com/images/textures/back/StarTrekTNGFinalUnityCE.webp",
@@ -143,6 +189,8 @@ fun MainScreen() {
                         bottom = "https://bigboxcollection.com/images/textures/bottom/StarTrekTNGFinalUnityCE.webp",
                     ),
                 ),
+
+                // Simcity 2000
                 BoxTextureUrls(
                     front = "https://bigboxcollection.com/images/textures/front/SimCity2000DE.webp",
                     back = "https://bigboxcollection.com/images/textures/back/SimCity2000DE.webp",
@@ -158,12 +206,17 @@ fun MainScreen() {
                 BoxTextureUrls(
                     front = "https://bigboxcollection.com/images/textures/front/SimCity2000DE.webp",
                     back = "https://bigboxcollection.com/images/textures/back/SimCity2000DE.webp",
-                    sides = SideSource.ColorFill(Color.Magenta),
-                    caps = CapSource.Explicit(
-                        top = "https://bigboxcollection.com/images/textures/top/SimCity2000DE.webp",
-                        bottom = "https://bigboxcollection.com/images/textures/bottom/SimCity2000DE.webp",
-                    ),
+                    sides = SideSource.Cardboard(),
+                    caps = CapSource.Cardboard(),
                 ),
+                BoxTextureUrls(
+                    front = "https://bigboxcollection.com/images/textures/front/SimCity2000DE.webp",
+                    back = "https://bigboxcollection.com/images/textures/back/SimCity2000DE.webp",
+                    sides = SideSource.ColorFill(),
+                    caps = CapSource.ColorFill(),
+                ),
+
+                // Ultima 9
                 BoxTextureUrls(
                     front = "https://bigboxcollection.com/images/textures/front/Ultima9DragonEditionPacificAsia.webp",
                     back = "https://bigboxcollection.com/images/textures/back/Ultima9DragonEditionPacificAsia.webp",
@@ -179,13 +232,14 @@ fun MainScreen() {
                 BoxTextureUrls(
                     front = "https://bigboxcollection.com/images/textures/front/Ultima9DragonEditionPacificAsia.webp",
                     back = "https://bigboxcollection.com/images/textures/back/Ultima9DragonEditionPacificAsia.webp",
-                    sides = SideSource.Spine(
-                        "https://bigboxcollection.com/images/textures/left/Ultima9DragonEditionPacificAsia.webp",
-                    ),
-                    caps = CapSource.Explicit(
-                        top = "https://bigboxcollection.com/images/textures/top/Ultima9DragonEditionPacificAsia.webp",
-                        bottom = "https://bigboxcollection.com/images/textures/bottom/Ultima9DragonEditionPacificAsia.webp",
-                    ),
+                    sides = SideSource.Cardboard(),
+                    caps = CapSource.Cardboard(),
+                ),
+                BoxTextureUrls(
+                    front = "https://bigboxcollection.com/images/textures/front/Ultima9DragonEditionPacificAsia.webp",
+                    back = "https://bigboxcollection.com/images/textures/back/Ultima9DragonEditionPacificAsia.webp",
+                    sides = SideSource.ColorFill(),
+                    caps = CapSource.ColorFill(),
                 ),
             )
         }

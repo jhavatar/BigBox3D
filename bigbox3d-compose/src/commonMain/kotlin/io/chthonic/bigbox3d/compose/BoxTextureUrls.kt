@@ -2,6 +2,9 @@ package io.chthonic.bigbox3d.compose
 
 import androidx.compose.ui.graphics.Color
 import io.chthonic.bigbox3d.core.RawImage
+import io.chthonic.bigbox3d.core.extractCardboardPalette
+import io.chthonic.bigbox3d.core.generateCardboard
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
@@ -12,19 +15,36 @@ sealed interface BoxTexture {
 }
 
 sealed interface SideSource {
+    /** Which face image to source from for [Cardboard]. */
+    enum class FaceSource { Front, Back }
+
     /** Explicit left and right face URLs. */
     data class Explicit(val left: String, val right: String) : SideSource
     /** Single spine URL; right face is generated as the horizontal mirror of left. */
     data class Spine(val url: String) : SideSource
     /** Both side faces filled with a solid color; defaults to the front image's edge average. */
     data class ColorFill(val color: Color? = null) : SideSource
+    /**
+     * Both side faces generated procedurally as a cardboard texture using the dominant
+     * background colors extracted from the given face image. Grain runs vertically.
+     */
+    data class Cardboard(val source: FaceSource = FaceSource.Front) : SideSource
 }
 
 sealed interface CapSource {
+    /** Which face image to source from for [Cardboard]. Spine falls back to Front when no spine URL is present. */
+    enum class FaceSource { Spine, Front, Back }
+
     /** Explicit top and bottom face URLs. */
     data class Explicit(val top: String, val bottom: String) : CapSource
     /** Both cap faces filled with a solid color; defaults to the front image's edge average. */
     data class ColorFill(val color: Color? = null) : CapSource
+    /**
+     * Both cap faces generated procedurally as a cardboard texture using the dominant
+     * background colors extracted from the given face image. Grain runs horizontally.
+     * Spine falls back to Front when no spine URL is present.
+     */
+    data class Cardboard(val source: FaceSource = FaceSource.Spine) : CapSource
 }
 
 data class BoxTextureUrls(
@@ -58,15 +78,49 @@ data class BoxTextureUrls(
             is SideSource.Explicit  -> leftDef!!.await() to rightDef!!.await()
             is SideSource.Spine     -> spineDef!!.await().let { it to it.flipHorizontal() }
             is SideSource.ColorFill -> colorFillRawImage(sides.color ?: edgeColor).let { it to it }
+            is SideSource.Cardboard -> {
+                val src = resolveSideFaceSource(sides.source, frontImg, backDef)
+                val img = generateCardboard(src.width, src.height, src.extractCardboardPalette(), horizontalGrain = false)
+                img to img
+            }
         }
+
+        // Captured for CapSource.Cardboard(Spine): leftImg equals the spine when
+        // sides is SideSource.Spine; null otherwise (falls back to front).
+        val spineImg: RawImage? = if (sides is SideSource.Spine) leftImg else null
 
         val (topImg, bottomImg) = when (caps) {
             is CapSource.Explicit  -> topDef!!.await() to bottomDef!!.await()
             is CapSource.ColorFill -> colorFillRawImage(caps.color ?: edgeColor).let { it to it }
+            is CapSource.Cardboard -> {
+                val src = resolveCapFaceSource(caps.source, frontImg, backDef, spineImg)
+                val img = generateCardboard(src.width, src.height, src.extractCardboardPalette(), horizontalGrain = true)
+                img to img
+            }
         }
 
         listOf(frontImg, backDef.await(), leftImg, rightImg, topImg, bottomImg)
     }
+}
+
+private suspend fun resolveSideFaceSource(
+    source: SideSource.FaceSource,
+    frontImg: RawImage,
+    backDef: Deferred<RawImage>,
+): RawImage = when (source) {
+    SideSource.FaceSource.Front -> frontImg
+    SideSource.FaceSource.Back  -> backDef.await()
+}
+
+private suspend fun resolveCapFaceSource(
+    source: CapSource.FaceSource,
+    frontImg: RawImage,
+    backDef: Deferred<RawImage>,
+    spineImg: RawImage?,
+): RawImage = when (source) {
+    CapSource.FaceSource.Front -> frontImg
+    CapSource.FaceSource.Back  -> backDef.await()
+    CapSource.FaceSource.Spine -> spineImg ?: frontImg
 }
 
 private fun RawImage.flipHorizontal(): RawImage {
@@ -75,7 +129,7 @@ private fun RawImage.flipHorizontal(): RawImage {
         for (x in 0 until width) {
             val src = (y * width + x) * 4
             val dst = (y * width + (width - 1 - x)) * 4
-            flipped[dst] = pixels[src]
+            flipped[dst]     = pixels[src]
             flipped[dst + 1] = pixels[src + 1]
             flipped[dst + 2] = pixels[src + 2]
             flipped[dst + 3] = pixels[src + 3]
@@ -85,9 +139,9 @@ private fun RawImage.flipHorizontal(): RawImage {
 }
 
 private fun colorFillRawImage(color: Color): RawImage {
-    val r = (color.red * 255f + 0.5f).toInt().coerceIn(0, 255).toByte()
+    val r = (color.red   * 255f + 0.5f).toInt().coerceIn(0, 255).toByte()
     val g = (color.green * 255f + 0.5f).toInt().coerceIn(0, 255).toByte()
-    val b = (color.blue * 255f + 0.5f).toInt().coerceIn(0, 255).toByte()
+    val b = (color.blue  * 255f + 0.5f).toInt().coerceIn(0, 255).toByte()
     val a = (color.alpha * 255f + 0.5f).toInt().coerceIn(0, 255).toByte()
     return RawImage(1, 1, byteArrayOf(r, g, b, a))
 }

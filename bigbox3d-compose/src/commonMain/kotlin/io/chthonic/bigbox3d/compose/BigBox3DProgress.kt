@@ -76,7 +76,7 @@ fun BigBox3DProgress(
 
     BigBox3D(
         textures = textures,
-        paused = !layoutVisible,
+        paused = !visible || !layoutVisible,
         rotationSpeed = rotationSpeed,
         glossLevel = glossLevel,
         shadowOpacity = shadowOpacity,

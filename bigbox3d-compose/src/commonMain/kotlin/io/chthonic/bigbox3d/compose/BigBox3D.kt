@@ -75,9 +75,9 @@ fun BigBox3D(
             atlas = withContext(Dispatchers.Default) {
                 val dims = when (textures) {
                     is BoxTextureUrls -> when {
-                        textures.sides !is SideSource.ColorFill ->
+                        textures.sides is SideSource.Explicit || textures.sides is SideSource.Spine ->
                             cuboidDimensions(front = rawImages[0], side = rawImages[2])
-                        textures.caps !is CapSource.ColorFill ->
+                        textures.caps is CapSource.Explicit ->
                             cuboidDimensionsFromTop(front = rawImages[0], top = rawImages[4])
                         else ->
                             cuboidDimensions(front = rawImages[0], depthRatio = 0.18f)
