@@ -152,13 +152,10 @@ fun BigBox3D(
             // Always propagate cancellation so Compose can restart the effect
             // if textures changed while this build was in flight.
             throw e
-        } catch (e: OutOfMemoryError) {
-            // Atlas allocation failed under memory pressure. Clear the cache to
-            // reclaim whatever cached atlases are held, then leave atlas null so
-            // the box renders as empty space rather than crashing.
+        } catch (e: Throwable) {
+            // Clear the cache on any unexpected failure — covers OutOfMemoryError on
+            // JVM/Android and frees cached atlas memory on all targets.
             atlasCache.clear()
-            atlas = null
-        } catch (e: Exception) {
             atlas = null
         }
     }
