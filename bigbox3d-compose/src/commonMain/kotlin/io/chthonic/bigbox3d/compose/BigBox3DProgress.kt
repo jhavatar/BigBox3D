@@ -48,8 +48,8 @@ fun BigBox3DProgress(
     fadeDurationMs: Int = 150,
     rotationSpeed: RotationSpeed = RotationSpeed.VERY_FAST,
     glossLevel: GlossLevel = GlossLevel.SEMI_GLOSS,
-    shadowOpacity: ShadowOpacity = ShadowOpacity.STRONG,
-    shadowFade: ShadowFade = ShadowFade.REALISTIC,
+    shadowOpacity: ShadowOpacity = ShadowOpacity.NONE,
+    shadowFade: ShadowFade = ShadowFade.SUPER_SOFT,
 ) {
     // On iOS, movableContentOf slots cross a SubcomposeLayout boundary (LazyColumn) when
     // moving between ParkingSpots and LoadingOverlay. In the same frame that the slot is

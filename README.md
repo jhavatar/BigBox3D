@@ -23,9 +23,13 @@ BigBox3D(
         // sides = SideSource.Spine("https://…/spine.webp"),
         // Or solid color — pass null to auto-derive color from the front image's edges:
         // sides = SideSource.ColorFill(),
+        // Or procedural cardboard texture derived from the front/back image colors:
+        // sides = SideSource.Cardboard(source = SideSource.FaceSource.Front),
         caps = CapSource.Explicit(top = "https://…/top.webp", bottom = "https://…/bottom.webp"),
         // Or solid color (auto-derived from front edge average when color not supplied):
         // caps = CapSource.ColorFill(),
+        // Or procedural cardboard texture — Spine source falls back to Front if no spine URL:
+        // caps = CapSource.Cardboard(source = CapSource.FaceSource.Spine),
     ),
     rotationSpeed = RotationSpeed.VERY_SLOW, // NONE / VERY_SLOW / SLOW / NORMAL / FAST / VERY_FAST
     onLoadingChange = { isLoading -> /* fires true while atlas loads, false when ready */ },
@@ -51,7 +55,7 @@ BigBox3D(
 
 ## BigBox3DProgress — loading indicator
 
-`BigBox3DProgress` is a convenience wrapper that uses `BigBox3D` as a loading spinner. It stays permanently in the composition so its GL state and texture atlas survive show/hide cycles — no reload on every appearance.
+`BigBox3DProgress` is a convenience wrapper that uses `BigBox3D` as a loading spinner.
 
 ```kotlin
 BigBox3DProgress(
@@ -62,28 +66,32 @@ BigBox3DProgress(
 
 When `visible` becomes `false` the render loop pauses immediately (zero GPU cost), the last frame fades out, and the composable collapses to zero size once the fade finishes.
 
-`BigBox3D` shows an empty sized box while loading (no built-in spinner). Wire `onLoadingChange` to know when each item is loading and overlay your own indicator — or use a `BigBox3DProgress` pool (see `BigBox3DProgressPool` in the demo app) so the same pre-loaded atlas is shared across loading items.
+`BigBox3D` shows an empty sized box while loading (no built-in spinner). Wire `onLoadingChange` to know when each item is loading and overlay your own indicator — or use `BigBox3DProgress` directly (see `BigBox3DProgressPool` in the demo app for a ready-made helper).
 
-### Reusing across screens with `movableContentOf`
+### Atlas caching — zero reload on re-appearance
 
-Because `BigBox3DProgress` stays permanently composed, its GL state (loaded textures, atlas) is preserved as long as it remains in the composition tree. To reuse the **same instance** — and therefore the same already-loaded atlas — across multiple screens without reloading, wrap it in `movableContentOf` at the call site:
+`BigBox3D` maintains a process-wide atlas cache keyed by `BoxTexture.boxKey()`. On re-appearance with the same textures the atlas is served from cache on the first frame — `isLoading` is `false` immediately, `onLoadingChange` never fires, and no spinner is shown.
+
+**The `BoxRawImages` instance must be stable** (same object reference) for the cache to hit. Create it once with `remember` or as a top-level val:
 
 ```kotlin
-// Create once at the root of your navigation
-val progressIndicator = remember {
-    movableContentOf {
-        BigBox3DProgress(textures = spinnerTextures, visible = isLoading)
-    }
+// ✓ Stable instance — cache always hits on re-appearance
+val spinnerTextures = remember {
+    BoxRawImages(
+        front  = loadRawImageFromBytes(Res.readBytes("files/front.webp")),
+        // …
+    )
 }
+BigBox3DProgress(textures = spinnerTextures, visible = isLoading)
 
-// Place it in whichever screen is active — state is carried across, not recreated
-when (currentScreen) {
-    Screen.Library    -> { LibraryScreen(...);    progressIndicator() }
-    Screen.GameDetail -> { GameDetailScreen(...); progressIndicator() }
-}
+// ✗ New instance every composition — always cache miss, always rebuilds
+BigBox3DProgress(
+    textures = BoxRawImages(front = loadRawImageFromBytes(…), …),
+    visible = isLoading,
+)
 ```
 
-`movableContentOf` tells Compose to **move** the existing composition subtree (including GL context and atlas) rather than destroy and recreate it when it appears at a different location in the tree. Without it, navigating between screens would recreate `BigBox3DProgress` from scratch and reload the textures each time.
+For `BoxTextureUrls` the key encodes the URL set, so the same URLs always hit the cache regardless of instance identity.
 
 > [!NOTE]
 > Images used were scraped from [Big Box Collection](https://bigboxcollection.com).

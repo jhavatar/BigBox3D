@@ -2,13 +2,9 @@ package io.chthonic.gamebigbox
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -18,20 +14,42 @@ import androidx.compose.ui.unit.dp
 import io.chthonic.bigbox3d.compose.BigBox3DProgress
 import io.chthonic.bigbox3d.compose.BoxRawImages
 
-// Controls whether a pool slot's BigBox3DProgress is visible (spinning) or paused.
-// False in parking spots; true when assigned to a loading item. The movableContentOf
-// content reads this from whichever CompositionLocalProvider it currently lives in,
-// so visibility flips automatically as the slot moves between locations.
-private val LocalPoolSlotVisible = compositionLocalOf { false }
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// WHY THIS IS SIMPLER THAN THE ORIGINAL movableContentOf APPROACH
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// The original implementation used movableContentOf to move BigBox3DProgress slots between
+// ParkingSpots (outside the LazyColumn) and LoadingOverlay (inside each item), preserving
+// the GL context and texture atlas across moves to avoid reloading.
+//
+// Compose Multiplatform 1.10.x has a bug where movableContentOf deactivation under fast
+// scroll leaves deactivated layout nodes with pending NeedsRemeasure state, causing:
+//   "java.lang.IllegalArgumentException: measure is called on a deactivated node"
+//
+// A position-tracking workaround (ParkingSpots using Modifier.offset based on
+// onGloballyPositioned bounds) was attempted but had a fundamental 1-frame scroll lag —
+// GLSurfaceView/MTKView renders bypass Compose's layout, so the spinner never tracked
+// scroll correctly.
+//
+// The solution is to render BigBox3DProgress directly inside the LazyColumn item so it
+// scrolls naturally. The atlas rebuild cost (the original reason for movableContentOf) is
+// eliminated by the atlas cache in BigBox3D.kt: the first build is cached by boxKey() and
+// every subsequent creation of BigBox3DProgress for the same textures starts with the cached
+// atlas immediately — isLoading is false on frame 1, no spinner shown at all.
+//
+// REVERT RECOMMENDATION: if a future Compose Multiplatform upgrade fixes the
+// deactivated-node bug, consider reverting to movableContentOf. It is architecturally
+// cleaner for platforms where the workaround matters. The git history contains both
+// the movableContentOf implementation and the position-tracking attempt.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 /**
- * Holds the state for a pool of [BigBox3DProgress] spinners that are shared across
- * loading items. Obtain an instance via [rememberBigBox3DProgressPool].
+ * Holds state for [BigBox3DProgress] loading overlays shown while box textures load.
+ * Obtain via [rememberBigBox3DProgressPool].
  */
 class BigBox3DProgressPool internal constructor(
-    internal val pool: List<@Composable () -> Unit>?,
+    internal val textures: BoxRawImages?,
     internal val loadingSet: Set<Int>,
-    internal val assignments: Map<Int, Int>,
     private val setLoading: (Int, Boolean) -> Unit,
 ) {
     /** Returns the [BigBox3D.onLoadingChange] callback for the item at [idx]. */
@@ -41,39 +59,16 @@ class BigBox3DProgressPool internal constructor(
 }
 
 /**
- * Creates and remembers a [BigBox3DProgressPool] backed by [textures].
- *
- * The pool keeps [poolSize] [BigBox3DProgress] instances permanently in composition
- * (atlas always warm) and assigns them to whichever items are currently loading.
- * Call [BigBox3DProgressPool.ParkingSpots] once above your list to give idle slots
- * a stable home, and [BigBox3DProgressPool.LoadingOverlay] inside each list item.
+ * Creates and remembers a [BigBox3DProgressPool].
  */
 @Composable
 fun rememberBigBox3DProgressPool(
     textures: BoxRawImages?,
-    poolSize: Int = 3,
 ): BigBox3DProgressPool {
-    val pool = remember(textures) {
-        val t = textures ?: return@remember null
-        List(poolSize) {
-            movableContentOf {
-                BigBox3DProgress(
-                    textures = t,
-                    visible = LocalPoolSlotVisible.current,
-                    size = 140.dp,
-                )
-            }
-        }
-    }
     var loadingSet by remember { mutableStateOf(emptySet<Int>()) }
-    val assignments = if (pool != null)
-        loadingSet.sorted().take(pool.size).mapIndexed { i, idx -> idx to i }.toMap()
-    else emptyMap()
-
     return BigBox3DProgressPool(
-        pool = pool,
+        textures = textures,
         loadingSet = loadingSet,
-        assignments = assignments,
         setLoading = { idx, loading ->
             loadingSet = if (loading) loadingSet + idx else loadingSet - idx
         },
@@ -81,40 +76,28 @@ fun rememberBigBox3DProgressPool(
 }
 
 /**
- * Renders invisible parking spots for idle pool slots.
- *
- * Must be placed in the **same composition scope** as the call to
- * [rememberBigBox3DProgressPool] — not inside a `SubcomposeLayout` (e.g. LazyColumn).
- * This ensures the move from parking → item overlay is atomic within one frame.
+ * No-op — kept for call-site compatibility with the movableContentOf implementation.
  */
 @Composable
-fun BigBox3DProgressPool.ParkingSpots() {
-    val p = pool ?: return
-    CompositionLocalProvider(LocalPoolSlotVisible provides false) {
-        for (slot in p.indices) {
-            // Each slot lives here when idle (visible=false, 0dp, render loop paused).
-            Box(Modifier.size(0.dp)) {
-                if (slot !in assignments.values) p[slot]()
-            }
-        }
-    }
-}
+fun BigBox3DProgressPool.ParkingSpots() = Unit
 
 /**
- * Shows the loading overlay for the item at [idx]: a pool slot if one is available,
- * otherwise a plain [CircularProgressIndicator]. Shows nothing when not loading.
+ * Renders a [BigBox3DProgress] overlay for [idx] while it is loading.
  *
- * Call this as a sibling to [BigBox3D] inside a `Box` so it appears as an overlay.
+ * The spinner lives inside the LazyColumn item so it scrolls naturally with the content.
+ * Atlas rebuild cost is eliminated by the atlas cache in BigBox3D: the first build for
+ * a given [BoxRawImages] is cached and reused on every subsequent appearance, so the
+ * spinner appears instantly (isLoading = false from frame 1) on re-entry.
+ *
+ * Falls back to [CircularProgressIndicator] if no textures are configured.
  */
 @Composable
 fun BigBox3DProgressPool.LoadingOverlay(idx: Int) {
     if (idx !in loadingSet) return
-    val poolSlot = assignments[idx]
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (poolSlot != null && pool != null) {
-            CompositionLocalProvider(LocalPoolSlotVisible provides true) {
-                pool[poolSlot]()
-            }
+        val t = textures
+        if (t != null) {
+            BigBox3DProgress(textures = t, visible = true, size = 140.dp)
         } else {
             CircularProgressIndicator()
         }

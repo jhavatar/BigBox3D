@@ -165,9 +165,12 @@ KMP Compose widget layer. Depends on `:bigbox3d-core` via `api()` (so core types
 | `iosMain` | `actual BigBox3DGlSurface` — `MTKView` embedded via `UIKitView`; `BigBox3DMetalDelegate` (`MTKViewDelegateProtocol`) drives `onSurfaceCreated`/`onSurfaceChanged`/`onDrawFrame`; gestures via `Modifier.pointerInput` (horizontal drag = rotate, vertical = pass to LazyColumn, pinch = zoom); `actual loadRawImageFromUrl` — `NSURLSession` → `UIImage` → `CGBitmapContext` RGBA readback; `actual ioDispatcher = Dispatchers.IO` |
 
 **Data flow in `BigBox3D`:**
-1. `LaunchedEffect(textures)` resolves face images into `List<RawImage>`: for `BoxTextureUrls`, all URL fetches are fired concurrently (`async`/`coroutineScope`) on `ioDispatcher`; for `BoxRawImages`, the pre-loaded images are used directly (no network). `SideSource.Spine` generates the right face by flipping the spine image horizontally. `SideSource.ColorFill` / `CapSource.ColorFill` generate solid-color 1×1 images (auto-derived from the front image's edge average when no color is supplied — computed lazily so `edgeAverageColor()` runs at most once per load). `SideSource.Cardboard` / `CapSource.Cardboard` generate a procedural cardboard texture: `extractCardboardPalette()` samples the source image (top-30% most frequent colors, excluding near-black/near-white) to produce shadow/base/highlight colors, then `generateCardboard()` layers sine corrugation, fiber flecks, and stretched grain. For caps the source image is rotated 90° first so its long axis maps across the cap width. `CapSource.Cardboard(Spine)` falls back to Front when no spine URL is present.
-2. Builds `BoxTextureAtlas` on `Dispatchers.Default` (`buildAtlas2x3` + dimension derivation). Depth inferred in priority order: side image aspect ratio → top image aspect ratio → hardcoded fallback `0.18f`. `CancellationException` is re-thrown (not swallowed) so Compose can restart the effect on key change.
-3. Passes atlas to `BigBox3DGlSurface` (expect/actual); shows an empty sized `Box` while loading — callers overlay their own loading content at stable call sites. `onLoadingChange: (Boolean) -> Unit` fires when loading starts/ends so callers can react. `supportsFullXAxisRotation` is always `true`.
+1. `remember(textures)` initialises `atlas` from a file-level `atlasCache` (keyed by `boxKey()`). Cache hit → `atlas` is non-null on frame 1, `isLoading = false` immediately, no spinner shown, no rebuild. Cache miss → `atlas = null`, loading begins.
+2. `LaunchedEffect(textures)` skips if `atlas != null` (cache hit). Otherwise resolves face images into `List<RawImage>`: for `BoxTextureUrls`, all URL fetches are fired concurrently (`async`/`coroutineScope`) on `ioDispatcher`; for `BoxRawImages`, the pre-loaded images are used directly (no network). `SideSource.Spine` generates the right face by flipping the spine image horizontally. `SideSource.ColorFill` / `CapSource.ColorFill` generate solid-color 1×1 images (auto-derived from the front image's edge average when no color is supplied — computed lazily so `edgeAverageColor()` runs at most once per load). `SideSource.Cardboard` / `CapSource.Cardboard` generate a procedural cardboard texture: `extractCardboardPalette()` samples the source image (top-30% most frequent colors, excluding near-black/near-white) to produce shadow/base/highlight colors, then `generateCardboard()` layers sine corrugation, fiber flecks, and stretched grain. For caps the source image is rotated 90° first so its long axis maps across the cap width. `CapSource.Cardboard(Spine)` falls back to Front when no spine URL is present.
+3. Builds `BoxTextureAtlas` on `Dispatchers.Default` via `atlasBuildSemaphore` (max 3 concurrent builds — prevents concurrent large `ByteArray` allocations from exhausting the heap). `buildAtlas2x3` + dimension derivation. Depth inferred in priority order: side image aspect ratio → top image aspect ratio → hardcoded fallback `0.18f`. Source images are released (`rawImages = emptyList()`) immediately after blitting to allow GC before the coroutine scope ends. `CancellationException` is propagated; `OutOfMemoryError` is caught, clears the atlas cache to reclaim memory, and leaves `atlas = null`. On success, writes the atlas to `atlasCache` (max 5 entries, FIFO eviction).
+4. Passes atlas to `BigBox3DGlSurface` (expect/actual); shows an empty sized `Box` while loading — callers overlay their own loading content at stable call sites. `onLoadingChange: (Boolean) -> Unit` fires when loading starts/ends so callers can react. `supportsFullXAxisRotation` is always `true`.
+
+**Atlas cache (`BigBox3D.kt` file-level):** `HashMap<String, BoxTextureAtlas>` keyed by `BoxTexture.boxKey()`, max 5 entries. Holds CPU-side `RawImage` pixel data (not GL handles), so entries are valid across GL context recreation — the surface re-uploads on `onSurfaceCreated`. For `BoxRawImages` the key is `"raw_N"` (unique per instance); for `BoxTextureUrls` the key encodes the full URL set. **Callers must keep the same `BoxRawImages` instance stable** (e.g. via `remember`) — creating a new instance produces a new key and always misses the cache.
 
 **Using bundled resources with `BoxRawImages`:** Place images in `src/commonMain/composeResources/files/` and add `compose.components.resources` to `commonMain` dependencies. Then:
 ```kotlin
@@ -180,16 +183,30 @@ BoxRawImages(
 
 **`BigBox3DProgress` — loading indicator composable (`BigBox3DProgress.kt`):**
 
-`BigBox3DProgress` wraps `BigBox3D` for use as a reusable loading spinner. It stays permanently in the composition so the GL state and texture atlas survive show/hide cycles with no reload.
+`BigBox3DProgress` wraps `BigBox3D` for use as a loading spinner. Thanks to the atlas cache in `BigBox3D`, it can be created fresh wherever needed — on re-appearance with the same `BoxRawImages` instance the atlas is served from cache on frame 1, so no spinner flash occurs.
 
 Key behaviours:
-- `paused = !visible || !layoutVisible` — render loop stops immediately when hidden (zero GPU cost); the double condition ensures the GL surface is paused during `movableContentOf` slot moves in both directions, preventing asynchronous `requestLayout()` calls on deactivated nodes
+- `paused = !visible || !layoutVisible` — render loop stops immediately when hidden (zero GPU cost); the double condition ensures the GL surface is paused during any visibility transition in both directions, preventing `requestLayout()` calls from the GL thread on nodes that may be deactivating
 - Alpha fades in/out over `fadeDurationMs` (default 150 ms) using `updateTransition`
 - Size collapses to `0.dp` only after the fade-out completes — no layout space or touch interception when invisible
 
-**`movableContentOf` — reusing the same instance across screens:**
+**Recommended usage — create as needed, cache handles the rest:**
 
-`movableContentOf` tells Compose to carry the existing composition subtree (GL context, atlas, coroutines) to the new location instead of recreating it. The pool pattern in `:app`'s `BigBox3DProgressPool` extends this: N slots (backed by `BoxRawImages`) live permanently in parking spots at `visible=false`/0dp; when an item starts loading a slot moves to that item's overlay at `visible=true`. A `CompositionLocal` (`LocalPoolSlotVisible`) controls visibility based on call-site context rather than explicit state, so the same `movableContentOf` lambda works in both locations.
+```kotlin
+// Create BigBox3DProgress directly wherever a spinner is needed.
+// The BoxRawImages instance must be stable (same object reference) for the
+// atlas cache to hit. Create it once with remember or as a top-level val.
+val spinnerTextures = remember {
+    BoxRawImages(front = loadRawImageFromBytes(...), ...)
+}
+
+// First creation: atlas builds, spinner shows during load.
+// Every subsequent creation with the same spinnerTextures: atlas served from
+// cache on frame 1 — isLoading false immediately, no spinner shown at all.
+BigBox3DProgress(textures = spinnerTextures, visible = isLoading)
+```
+
+**`BigBox3DProgressPool` in `:app`:** A thin helper that tracks which LazyColumn items are loading (`loadingSet`) and renders `BigBox3DProgress` directly inside each loading item's `LoadingOverlay`. The spinner lives inside the LazyColumn item and scrolls naturally with it. Atlas reuse is handled by the cache rather than by composition-level slot movement.
 
 **Web GL surface (`BigBox3DGlSurface.wasmJs.kt`):**
 - A WebGL2 `<canvas>` is appended to `<html>` (not `<body>`) with `position:fixed; pointer-events:none; z-index:1`. It must go to `<html>` because Compose MP 1.10.3 sets `position:relative; overflow:hidden` on `<body>`, which causes a Firefox bug where `position:fixed` children have `offsetWidth=0` and are invisible.
@@ -211,7 +228,7 @@ Key behaviours:
 
 | Source set | Contents |
 |------------|----------|
-| `commonMain` | `MainScreen`, `SettingsPanel`, and all UI composables — shared between Android, web, and desktop. Uses `compose.components.resources` for bundled images in `composeResources/files/`. `LazyColumn` items use `BoxTexture.boxKey()` as stable keys to prevent state reuse when the list is dynamically prepended. `BigBox3DProgressPool` — pool of `BigBox3DProgress` instances shared across loading items via `movableContentOf`; exposes `rememberBigBox3DProgressPool`, `ParkingSpots()`, and `LoadingOverlay(idx)`. |
+| `commonMain` | `MainScreen`, `SettingsPanel`, and all UI composables — shared between Android, web, and desktop. Uses `compose.components.resources` for bundled images in `composeResources/files/`. `LazyColumn` items use `BoxTexture.boxKey()` as stable keys to prevent state reuse when the list is dynamically prepended. `BigBox3DProgressPool` — tracks which items are loading and renders `BigBox3DProgress` directly inside each item's `LoadingOverlay` (no `movableContentOf` — atlas reuse via `BigBox3D`'s cache); exposes `rememberBigBox3DProgressPool`, `ParkingSpots()` (no-op), and `LoadingOverlay(idx)`. |
 | `androidMain` | `MainActivity` (`ComponentActivity` entry point, wraps `MainScreen` in `GameBigBoxTheme`); `@Preview` composable; `GameBigBoxTheme` with Android dynamic colors |
 | `wasmJsMain` | `main()` — web entry point using `ComposeViewport(document.body!!)` wrapped in `MaterialTheme` |
 | `wasmJsMain/resources` | `index.html` — loads `app.js` (Skiko is bundled into `app.js` by webpack in Compose MP 1.10.3; the old separate `skiko.js` tag was removed) |
@@ -223,28 +240,21 @@ Self-contained Android-only implementation using `android.graphics.Bitmap` and `
 
 ## BigBox3DProgress — loading indicator composable
 
-`BigBox3DProgress` wraps `BigBox3D` for use as a reusable loading spinner. It stays permanently in the composition so the GL state and texture atlas survive show/hide cycles with no reload.
+`BigBox3DProgress` wraps `BigBox3D` for use as a loading spinner.
 
 **Key behaviours:**
-- `paused = !visible || !layoutVisible` — render loop stops immediately when hidden; double condition keeps GL paused during `movableContentOf` slot moves in both directions
+- `paused = !visible || !layoutVisible` — render loop stops immediately when hidden (zero GPU cost); the double condition ensures the GL surface is paused during any visibility transition in both directions
 - Alpha fades in/out over `fadeDurationMs` (default 300 ms) using `updateTransition`
 - Size collapses to `0.dp` only after the fade-out completes (`transition.currentState != transition.targetState` guards the size) — no layout space or touch interception when invisible
 - Defaults: `RotationSpeed.VERY_FAST`, `ShadowOpacity.STRONG`, `ShadowFade.REALISTIC`, `size = 200.dp`
 
-**`movableContentOf` — reusing the same instance across screens:**
+**Recommended usage — create as needed, atlas cache eliminates reloads:**
 
-Compose identifies composables by their position in the tree. Navigating between screens normally destroys and recreates `BigBox3DProgress`, reloading the atlas on every appearance. `movableContentOf` tells Compose to carry the existing composition subtree (GL context, atlas, coroutines) to the new location instead of recreating it:
+The atlas cache in `BigBox3D` (keyed by `BoxTexture.boxKey()`) means `BigBox3DProgress` does not need to stay permanently in the composition. On any re-appearance with the same `BoxRawImages` instance, the atlas is served from cache on frame 1 — `isLoading` is false immediately, `onLoadingChange(true)` never fires, no spinner shown.
 
-```kotlin
-val spinner = remember {
-    movableContentOf {
-        BigBox3DProgress(textures = spinnerTextures, visible = isLoading)
-    }
-}
-// Place spinner() wherever needed — one atlas load, zero reloads on navigation
-```
+The `BoxRawImages` instance **must be stable** (same object reference) across compositions. Create it once with `remember` or as a top-level / singleton val — a new instance gets a new `boxKey()` and always misses the cache.
 
-`movableContentOf` must be created at the call site (e.g. in the root navigation composable). If it were hidden inside `BigBox3DProgress` itself, the wrapper node would be the fixed point in the tree and the move benefit would be lost.
+**Note on `movableContentOf`:** Earlier versions used `movableContentOf` to carry the GL context and atlas between composition locations without rebuilding. This was abandoned because Compose Multiplatform 1.10.x has a bug where `movableContentOf` deactivation under fast LazyColumn scroll leaves nodes with pending `NeedsRemeasure` state, crashing with "measure is called on a deactivated node". The atlas cache achieves the same zero-rebuild goal without composition-level movement. If a future Compose Multiplatform release fixes the deactivated-node bug, `movableContentOf` could be reconsidered for cases where the GL context itself (not just the atlas) needs to survive navigation.
 
 ## Visual Config Enums (in `:bigbox3d-core`)
 
@@ -319,6 +329,6 @@ Then in Xcode: **Product → Clean Build Folder** (⌘⇧K) → ▶
 - Pinch-to-zoom on web touch screens is not yet implemented. Mouse-wheel zoom works when the list is stationary (suppressed during list scroll via a 300 ms debounce).
 - Desktop/JVM platform consumers must add LWJGL3 native jars as `runtimeOnly` dependencies — the libraries ship only the binding JARs. Required natives: `org.lwjgl:lwjgl:3.4.1:natives-<platform>`, `org.lwjgl:lwjgl-opengl:3.4.1:natives-<platform>`, and `org.lwjgl:lwjgl-glfw:3.4.1:natives-<platform>` (GLFW natives are only needed on Linux/Windows; macOS uses CGL).
 - On macOS, `glfwInit()` crashes with `SIGILL` in `libdispatch.dylib` (`_dispatch_assert_queue_fail`) when called from any non-main thread, including the AWT EDT, because GLFW's macOS path calls HIToolbox's Text Services Manager which asserts the GCD main queue. The JVM implementation bypasses this entirely by using CGL on macOS.
-- **iOS — `BigBox3DProgress` / `movableContentOf` crash ("measure is called on a deactivated node"):** When a `movableContentOf` pool slot moves between `ParkingSpots` (main composition) and `LoadingOverlay` (inside a `LazyColumn` SubcomposeLayout), Compose iOS's Metal DisplayLink can fire `measureAndLayout` during the brief gap where the slot's nodes are deactivated at the old location but not yet activated at the new one. The slot's `.size()` modifier changes in the same frame as the move, scheduling a remeasure that hits the deactivated `UIKitView` internal node. Fixed in `BigBox3DProgress.kt` by delaying all layout-affecting state via `LaunchedEffect(visible) { withFrameNanos { }; layoutVisible = visible }` so the remeasure is only scheduled in the frame after the slot has settled. The 16 ms delay is imperceptible. This is a Compose Multiplatform iOS bug with `movableContentOf` + `UIKitView` + SubcomposeLayout that cannot be fixed from iOS-specific code alone.
+- **`movableContentOf` crash ("measure is called on a deactivated node"):** Compose Multiplatform 1.10.x has a bug where `movableContentOf` deactivation does not clear `NeedsRemeasure` state from the deactivated nodes. If a layout pass runs before the nodes are fully cleaned up — which fast LazyColumn scroll reliably triggers on Android and iOS — the crash occurs. `BigBox3DProgressPool` no longer uses `movableContentOf`; `BigBox3DProgress` is rendered directly inside each loading item so it scrolls naturally. Atlas reuse is handled by the atlas cache in `BigBox3D.kt` (keyed by `boxKey()`). The `LaunchedEffect(visible) { withFrameNanos { }; layoutVisible = visible }` delay in `BigBox3DProgress.kt` is retained as a safety guard for any future reintroduction of composition-level movement. If a future Compose Multiplatform release fixes the deactivated-node bug, `movableContentOf` can be reconsidered — the git history contains both the pool implementation and a position-tracking workaround that was attempted before settling on the cache approach.
 - **iOS — black background behind 3D box:** The transparent areas of the Metal surface (where the clear colour should be alpha=0) render as opaque black instead of showing the Compose canvas content behind the `UIKitView`. Root cause not yet resolved — the K/N `cValue<MTLClearColor>` property setter may not be invoking the ObjC setter, and/or Compose MP 1.10.3's `UIKitView` does not expose a `background` parameter to control the interop container's colour. The `UIKitView` `background = Color.Transparent` parameter does not exist in Compose MP 1.10.3.
 - **iOS — `UIKitView` gesture handling:** Horizontal-dominant single-finger drags rotate the box; vertical-dominant drags pass to the `LazyColumn` for scroll; two-finger pinch zooms. Pinch-to-zoom on iOS touch screens works (unlike web where only mouse-wheel is supported).
