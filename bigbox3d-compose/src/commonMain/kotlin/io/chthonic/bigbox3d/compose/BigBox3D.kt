@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import coil3.compose.LocalPlatformContext
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
 import io.chthonic.bigbox3d.core.GlossLevel
+import io.chthonic.bigbox3d.core.RawImage
 import io.chthonic.bigbox3d.core.RotationSpeed
 import io.chthonic.bigbox3d.core.ShadowFade
 import io.chthonic.bigbox3d.core.ShadowOpacity
@@ -19,7 +20,17 @@ import io.chthonic.bigbox3d.core.buildAtlas2x3
 import io.chthonic.bigbox3d.core.cuboidDimensions
 import io.chthonic.bigbox3d.core.cuboidDimensionsFromTop
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+
+// Limits concurrent atlas builds across all BigBox3D instances.
+// Each build allocates a large pixel buffer (the atlas ByteArray — typically 10–20 MB).
+// Without a cap, fast-scrolling through a LazyColumn triggers many simultaneous builds
+// whose combined allocations can exhaust the heap. URL fetching in toRawImages() is
+// unaffected and still runs concurrently — only the CPU/memory-intensive buildAtlas2x3
+// step is gated. 3 permits allows meaningful parallelism while bounding peak atlas memory.
+private val atlasBuildSemaphore = Semaphore(3)
 
 /**
  * Compose Multiplatform widget that renders a 3D PC game big box.
@@ -62,42 +73,57 @@ fun BigBox3D(
     LaunchedEffect(textures) {
         atlas = null
         try {
-            val rawImages = when (textures) {
+            // var so we can null it out immediately after the atlas is built, releasing
+            // the source image ByteArrays for GC before the coroutine scope ends.
+            var rawImages: List<RawImage> = when (textures) {
                 is BoxTextureUrls -> withContext(ioDispatcher) {
                     textures.toRawImages { url -> loadRawImageFromUrl(url, platformContext) }
                 }
+
                 is BoxRawImages -> listOf(
                     textures.front, textures.back,
-                    textures.left,  textures.right,
-                    textures.top,   textures.bottom,
+                    textures.left, textures.right,
+                    textures.top, textures.bottom,
                 )
             }
-            atlas = withContext(Dispatchers.Default) {
-                val dims = when (textures) {
-                    is BoxTextureUrls -> when {
-                        textures.sides is SideSource.Explicit || textures.sides is SideSource.Spine ->
-                            cuboidDimensions(front = rawImages[0], side = rawImages[2])
-                        textures.caps is CapSource.Explicit ->
-                            cuboidDimensionsFromTop(front = rawImages[0], top = rawImages[4])
-                        else ->
-                            cuboidDimensions(front = rawImages[0], depthRatio = 0.18f)
+            atlas = atlasBuildSemaphore.withPermit {
+                withContext(Dispatchers.Default) {
+                    val dims = when (textures) {
+                        is BoxTextureUrls -> when {
+                            textures.sides is SideSource.Explicit || textures.sides is SideSource.Spine ->
+                                cuboidDimensions(front = rawImages[0], side = rawImages[2])
+
+                            textures.caps is CapSource.Explicit ->
+                                cuboidDimensionsFromTop(front = rawImages[0], top = rawImages[4])
+
+                            else ->
+                                cuboidDimensions(front = rawImages[0], depthRatio = 0.18f)
+                        }
+                        // BoxRawImages always provides all 6 faces; derive depth from the side image.
+                        is BoxRawImages -> cuboidDimensions(
+                            front = rawImages[0],
+                            side = rawImages[2]
+                        )
                     }
-                    // BoxRawImages always provides all 6 faces; derive depth from the side image.
-                    is BoxRawImages -> cuboidDimensions(front = rawImages[0], side = rawImages[2])
+                    val meta = rawImages.buildAtlas2x3(
+                        halfW = dims.halfWidth,
+                        halfH = dims.halfHeight,
+                        halfD = dims.halfDepth,
+                    )
+                    // Source images have been fully blitted into the atlas — release them
+                    // immediately so the GC can reclaim their ByteArrays before this coroutine
+                    // scope ends. Each image can be several MB; releasing here rather than
+                    // waiting for scope exit meaningfully reduces peak heap under concurrent loads.
+                    rawImages = emptyList<RawImage>()
+                    BoxTextureAtlas(
+                        image = meta.image,
+                        regions = meta.regions,
+                        supportsFullXAxisRotation = true,
+                        halfWidth = dims.halfWidth,
+                        halfHeight = dims.halfHeight,
+                        halfDepth = dims.halfDepth,
+                    )
                 }
-                val meta = rawImages.buildAtlas2x3(
-                    halfW = dims.halfWidth,
-                    halfH = dims.halfHeight,
-                    halfD = dims.halfDepth,
-                )
-                BoxTextureAtlas(
-                    image = meta.image,
-                    regions = meta.regions,
-                    supportsFullXAxisRotation = true,
-                    halfWidth = dims.halfWidth,
-                    halfHeight = dims.halfHeight,
-                    halfDepth = dims.halfDepth,
-                )
             }
         } catch (e: Exception) {
             // Never swallow coroutine cancellation — propagate it so Compose can
@@ -120,7 +146,7 @@ fun BigBox3D(
             shadowYOffsetRatio = shadowYOffsetRatio,
             onGestureActive = onGestureActive,
         )
-    // While loading, occupy the modifier's space but show nothing —
-    // the caller overlays loading content at a stable call site outside BigBox3D.
+        // While loading, occupy the modifier's space but show nothing —
+        // the caller overlays loading content at a stable call site outside BigBox3D.
     } ?: Box(modifier = modifier)
 }
