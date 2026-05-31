@@ -99,6 +99,32 @@ fun RawImage.separableBoxBlur(radius: Int): RawImage {
 }
 
 /**
+ * Returns the average luminance of the image as a percentage (0 = black, 100 = white).
+ * Uses the Rec. 601 formula: lum = 0.299·R + 0.587·G + 0.114·B.
+ * Samples up to [maxSamples] pixels on a uniform grid for O(1) cost relative to image size.
+ */
+fun RawImage.averageLuminancePercent(maxSamples: Int = 10_000): Float {
+    val step = maxOf(1, kotlin.math.sqrt((width * height).toDouble() / maxSamples).toInt())
+    var sum = 0f
+    var count = 0
+    var y = 0
+    while (y < height) {
+        var x = 0
+        while (x < width) {
+            val i = (y * width + x) * 4
+            val r = pixels[i].toInt() and 0xFF
+            val g = pixels[i + 1].toInt() and 0xFF
+            val b = pixels[i + 2].toInt() and 0xFF
+            sum += 0.299f * r + 0.587f * g + 0.114f * b
+            count++
+            x += step
+        }
+        y += step
+    }
+    return if (count > 0) sum / count / 255f * 100f else 0f
+}
+
+/**
  * Bilinear interpolation scale to [targetW] x [targetH].
  * Produces smooth results for both upscaling and downscaling — used by the
  * cardboard grain layer to avoid blocky nearest-neighbour artefacts.

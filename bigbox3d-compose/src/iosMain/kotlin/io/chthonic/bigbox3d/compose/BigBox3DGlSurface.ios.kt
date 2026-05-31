@@ -12,7 +12,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.UIKitView
+import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
+import io.chthonic.bigbox3d.core.Brightness
 import io.chthonic.bigbox3d.core.CuboidRenderer
 import io.chthonic.bigbox3d.core.GlApiImpl
 import io.chthonic.bigbox3d.core.GlossLevel
@@ -48,6 +50,8 @@ internal actual fun BigBox3DGlSurface(
     shadowFade: ShadowFade,
     shadowXOffsetRatio: Float,
     shadowYOffsetRatio: Float,
+    ambientBrightness: AmbientBrightness,
+    brightness: Brightness,
     onGestureActive: (Boolean) -> Unit,
 ) {
     val device = remember {
@@ -75,6 +79,8 @@ internal actual fun BigBox3DGlSurface(
     renderer.shadowFade         = shadowFade
     renderer.shadowXOffsetRatio = shadowXOffsetRatio
     renderer.shadowYOffsetRatio = shadowYOffsetRatio
+    renderer.ambientBrightness  = ambientBrightness
+    renderer.brightness         = brightness
 
     UIKitView(
         factory = {

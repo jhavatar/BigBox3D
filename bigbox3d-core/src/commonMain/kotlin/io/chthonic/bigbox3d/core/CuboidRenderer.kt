@@ -18,6 +18,8 @@ private const val STALE_ZOOM = -1f
  */
 class CuboidRenderer(private val atlas: BoxTextureAtlas) {
 
+    var ambientBrightness: AmbientBrightness = AmbientBrightness.NORMAL
+    var brightness: Brightness = Brightness.NORMAL
     var glossLevel: GlossLevel = GlossLevel.SEMI_GLOSS
     var rotationSpeed: RotationSpeed = RotationSpeed.VERY_SLOW
     var zoomFactor: Float = DEFAULT_ZOOM_FACTOR
@@ -80,6 +82,8 @@ class CuboidRenderer(private val atlas: BoxTextureAtlas) {
             rotY = angleY,
             cameraZ = lastZoomFactor,
             gloss = glossLevel.glossValue,
+            ambient = ambientBrightness.ambientValue,
+            brightness = brightness.brightnessValue,
         )
     }
 

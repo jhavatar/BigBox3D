@@ -46,7 +46,12 @@ import io.chthonic.bigbox3d.core.ShadowFade
 import io.chthonic.bigbox3d.core.ShadowOpacity
 import kotlin.math.roundToInt
 
-private data class BoxEntry(val texture: BoxTexture, val name: String, val sidesLabel: String, val capsLabel: String)
+private data class BoxEntry(
+    val texture: BoxTexture,
+    val name: String,
+    val sidesLabel: String,
+    val capsLabel: String
+)
 
 private fun SideSource.label() = when (this) {
     is SideSource.Explicit -> "Explicit"
@@ -129,6 +134,7 @@ fun MainScreen() {
                 sidesLabel = sides.label(),
                 capsLabel = caps.label(),
             )
+
             fun entryExplicit(name: String, caps: CapSource, urlSlug: String) = entry(
                 name, SideSource.Explicit(
                     left = "https://bigboxcollection.com/images/textures/left/$urlSlug.webp",
@@ -137,18 +143,22 @@ fun MainScreen() {
             )
             listOf(
                 // Doom 2
-                entryExplicit("Doom 2", CapSource.Explicit(
-                    top = "https://bigboxcollection.com/images/textures/top/Doom2.webp",
-                    bottom = "https://bigboxcollection.com/images/textures/bottom/Doom2.webp",
-                ), "Doom2"),
+                entryExplicit(
+                    "Doom 2", CapSource.Explicit(
+                        top = "https://bigboxcollection.com/images/textures/top/Doom2.webp",
+                        bottom = "https://bigboxcollection.com/images/textures/bottom/Doom2.webp",
+                    ), "Doom2"
+                ),
                 entry("Doom 2", SideSource.Cardboard(), CapSource.Cardboard(), "Doom2"),
                 entry("Doom 2", SideSource.ColorFill(), CapSource.ColorFill(), "Doom2"),
 
                 // M&M 4
-                entryExplicit("M&M 4", CapSource.Explicit(
-                    top = "https://bigboxcollection.com/images/textures/top/MightMagic4.webp",
-                    bottom = "https://bigboxcollection.com/images/textures/bottom/MightMagic4.webp",
-                ), "MightMagic4"),
+                entryExplicit(
+                    "M&M 4", CapSource.Explicit(
+                        top = "https://bigboxcollection.com/images/textures/top/MightMagic4.webp",
+                        bottom = "https://bigboxcollection.com/images/textures/bottom/MightMagic4.webp",
+                    ), "MightMagic4"
+                ),
                 entry("M&M 4", SideSource.Cardboard(), CapSource.Cardboard(), "MightMagic4"),
                 entry("M&M 4", SideSource.ColorFill(), CapSource.ColorFill(), "MightMagic4"),
 
@@ -157,26 +167,62 @@ fun MainScreen() {
                 entryExplicit("Star Control", CapSource.ColorFill(), "StarControl"),
 
                 // Star Trek TNG
-                entryExplicit("Star Trek TNG", CapSource.Explicit(
-                    top = "https://bigboxcollection.com/images/textures/top/StarTrekTNGFinalUnityCE.webp",
-                    bottom = "https://bigboxcollection.com/images/textures/bottom/StarTrekTNGFinalUnityCE.webp",
-                ), "StarTrekTNGFinalUnityCE"),
+                entryExplicit(
+                    "Star Trek TNG", CapSource.Explicit(
+                        top = "https://bigboxcollection.com/images/textures/top/StarTrekTNGFinalUnityCE.webp",
+                        bottom = "https://bigboxcollection.com/images/textures/bottom/StarTrekTNGFinalUnityCE.webp",
+                    ), "StarTrekTNGFinalUnityCE"
+                ),
 
                 // SimCity 2000
-                entryExplicit("SimCity 2000", CapSource.Explicit(
-                    top = "https://bigboxcollection.com/images/textures/top/SimCity2000DE.webp",
-                    bottom = "https://bigboxcollection.com/images/textures/bottom/SimCity2000DE.webp",
-                ), "SimCity2000DE"),
-                entry("SimCity 2000", SideSource.Cardboard(), CapSource.Cardboard(), "SimCity2000DE"),
-                entry("SimCity 2000", SideSource.ColorFill(), CapSource.ColorFill(), "SimCity2000DE"),
+                entryExplicit(
+                    "SimCity 2000", CapSource.Explicit(
+                        top = "https://bigboxcollection.com/images/textures/top/SimCity2000DE.webp",
+                        bottom = "https://bigboxcollection.com/images/textures/bottom/SimCity2000DE.webp",
+                    ), "SimCity2000DE"
+                ),
+                entry(
+                    "SimCity 2000",
+                    SideSource.Cardboard(),
+                    CapSource.Cardboard(),
+                    "SimCity2000DE"
+                ),
+                entry(
+                    "SimCity 2000",
+                    SideSource.ColorFill(),
+                    CapSource.ColorFill(),
+                    "SimCity2000DE"
+                ),
 
                 // Ultima 9
-                entryExplicit("Ultima 9", CapSource.Explicit(
-                    top = "https://bigboxcollection.com/images/textures/top/Ultima9DragonEditionPacificAsia.webp",
-                    bottom = "https://bigboxcollection.com/images/textures/bottom/Ultima9DragonEditionPacificAsia.webp",
-                ), "Ultima9DragonEditionPacificAsia"),
-                entry("Ultima 9", SideSource.Cardboard(), CapSource.Cardboard(), "Ultima9DragonEditionPacificAsia"),
-                entry("Ultima 9", SideSource.ColorFill(), CapSource.ColorFill(), "Ultima9DragonEditionPacificAsia"),
+                entryExplicit(
+                    "Ultima 9", CapSource.Explicit(
+                        top = "https://bigboxcollection.com/images/textures/top/Ultima9DragonEditionPacificAsia.webp",
+                        bottom = "https://bigboxcollection.com/images/textures/bottom/Ultima9DragonEditionPacificAsia.webp",
+                    ), "Ultima9DragonEditionPacificAsia"
+                ),
+                entry(
+                    "Ultima 9",
+                    SideSource.Cardboard(),
+                    CapSource.Cardboard(),
+                    "Ultima9DragonEditionPacificAsia"
+                ),
+                entry(
+                    "Ultima 9",
+                    SideSource.ColorFill(),
+                    CapSource.ColorFill(),
+                    "Ultima9DragonEditionPacificAsia"
+                ),
+
+                // Wizardry I
+                entryExplicit(
+                    "Wizardry I", CapSource.Explicit(
+                        top = "https://bigboxcollection.com/images/textures/top/Wizardry.webp",
+                        bottom = "https://bigboxcollection.com/images/textures/bottom/Wizardry.webp",
+                    ), "Wizardry"
+                ),
+                entry("Wizardry I", SideSource.Cardboard(), CapSource.Cardboard(), "Wizardry"),
+                entry("Wizardry I", SideSource.ColorFill(), CapSource.ColorFill(), "Wizardry"),
             )
         }
         val boxes = urlBoxes
@@ -186,7 +232,7 @@ fun MainScreen() {
             Modifier
                 .statusBarsPadding()
                 .padding(top = innerPadding.calculateTopPadding())
-                .background(Color.Green)
+                .background(Color.DarkGray)
                 .fillMaxSize(),
             userScrollEnabled = !gestureStates.any { it },
         ) {
@@ -229,6 +275,7 @@ fun MainScreen() {
                         shadowYOffsetRatio = shadowY,
                         onGestureActive = { gestureStates[idx] = it },
                         onLoadingChange = progressPool.onLoadingChange(idx),
+                        onFrontLuminance = { p -> println("luminance = $p for ${entry.texture.boxKey()}") }
                     )
                     progressPool.LoadingOverlay(idx)
                 }

@@ -31,7 +31,10 @@ BigBox3D(
         // Or procedural cardboard texture — Spine source falls back to Front if no spine URL:
         // caps = CapSource.Cardboard(source = CapSource.FaceSource.Spine),
     ),
-    rotationSpeed = RotationSpeed.VERY_SLOW, // NONE / VERY_SLOW / SLOW / NORMAL / FAST / VERY_FAST
+    rotationSpeed = RotationSpeed.VERY_SLOW,     // NONE / VERY_SLOW / SLOW / NORMAL / FAST / VERY_FAST
+    ambientBrightness = AmbientBrightness.NORMAL, // DARK / NORMAL / BRIGHT / VERY_BRIGHT — shadow floor
+    brightness = Brightness.AUTO,                  // AUTO / DARK / NORMAL / BOOST / STRONG_BOOST — pre-lighting multiplier; AUTO detects from front face luminance
+    onFrontLuminance = { pct -> /* 0–100: <15 very dark, 15–30 dark, 30–50 mid, >50 light */ },
     onLoadingChange = { isLoading -> /* fires true while atlas loads, false when ready */ },
 )
 ```
@@ -51,7 +54,7 @@ BigBox3D(
 )
 ```
 
-`edgeAverageColor()` is also available as a `RawImage` extension if you want to derive a color manually after loading an image.
+`edgeAverageColor()` and `averageLuminancePercent()` are available as `RawImage` extensions for manual color/brightness inspection after loading.
 
 ## BigBox3DProgress — loading indicator
 

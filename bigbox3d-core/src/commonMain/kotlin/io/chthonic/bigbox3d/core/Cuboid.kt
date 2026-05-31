@@ -62,6 +62,8 @@ internal class Cuboid(
     private val uViewPos: Int
     private val uLightColor: Int
     private val uGloss: Int
+    private val uAmbient: Int
+    private val uBrightness: Int
     private val uCenter: Int
     private val uScale: Int
     private val uAlpha: Int
@@ -149,12 +151,14 @@ internal class Cuboid(
             uniform vec3 uViewPos;
             uniform vec3 uLightColor;
             uniform float uMaterialGloss;
+            uniform float uAmbient;
+            uniform float uBrightness;
             in vec2 vTex;
             in vec3 vNormal;
             in vec3 vFragPos;
             out vec4 fragColor;
             void main(){
-                vec3 texColor = texture(uTex, vTex).rgb;
+                vec3 texColor = texture(uTex, vTex).rgb * uBrightness;
                 vec3 norm = normalize(vNormal);
                 vec3 lightDir = normalize(uLightPos - vFragPos);
                 vec3 viewDir = normalize(uViewPos - vFragPos);
@@ -163,7 +167,7 @@ internal class Cuboid(
                 float shininess = mix(8.0, 128.0, uMaterialGloss);
                 float specPower = mix(0.05, 1.0, uMaterialGloss);
                 float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess) * specPower;
-                vec3 result = texColor * (0.4 + 0.6 * diff) + uLightColor * spec;
+                vec3 result = texColor * (uAmbient + (1.0 - uAmbient) * diff) + uLightColor * spec;
                 fragColor = vec4(result, 1.0);
             }
         """.trimIndent()
@@ -200,6 +204,8 @@ internal class Cuboid(
         uViewPos    = gl.glGetUniformLocation(program, "uViewPos")
         uLightColor = gl.glGetUniformLocation(program, "uLightColor")
         uGloss      = gl.glGetUniformLocation(program, "uMaterialGloss")
+        uAmbient    = gl.glGetUniformLocation(program, "uAmbient")
+        uBrightness = gl.glGetUniformLocation(program, "uBrightness")
         uCenter     = gl.glGetUniformLocation(shadowProgram, "uCenter")
         uScale      = gl.glGetUniformLocation(shadowProgram, "uScale")
         uAlpha      = gl.glGetUniformLocation(shadowProgram, "uAlpha")
@@ -263,7 +269,7 @@ internal class Cuboid(
         gl.glEnable(GL_DEPTH_TEST)
     }
 
-    fun draw(gl: GlApi, vp: FloatArray, rotX: Float, rotY: Float, cameraZ: Float, gloss: Float) {
+    fun draw(gl: GlApi, vp: FloatArray, rotX: Float, rotY: Float, cameraZ: Float, gloss: Float, ambient: Float, brightness: Float) {
         gl.glUseProgram(program)
         gl.glEnableVertexAttribArray(0)
         gl.glEnableVertexAttribArray(1)
@@ -289,6 +295,8 @@ internal class Cuboid(
         gl.glUniform3f(uViewPos,    0f, 0f, cameraZ)
         gl.glUniform3f(uLightColor, 1f, 1f, 1f)
         gl.glUniform1f(uGloss,      gloss.coerceIn(0f, 1f))
+        gl.glUniform1f(uAmbient,    ambient.coerceIn(0f, 1f))
+        gl.glUniform1f(uBrightness, brightness.coerceAtLeast(0f))
 
         gl.glBindTexture(GL_TEXTURE_2D, textureId)
         gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboIds[3])

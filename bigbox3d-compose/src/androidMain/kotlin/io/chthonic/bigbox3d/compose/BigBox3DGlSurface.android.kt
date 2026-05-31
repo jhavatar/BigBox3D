@@ -11,7 +11,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
+import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
+import io.chthonic.bigbox3d.core.Brightness
 import io.chthonic.bigbox3d.core.CuboidRenderer
 import io.chthonic.bigbox3d.core.GlApiImpl
 import io.chthonic.bigbox3d.core.GlossLevel
@@ -34,6 +36,8 @@ internal actual fun BigBox3DGlSurface(
     shadowFade: ShadowFade,
     shadowXOffsetRatio: Float,
     shadowYOffsetRatio: Float,
+    ambientBrightness: AmbientBrightness,
+    brightness: Brightness,
     onGestureActive: (Boolean) -> Unit,
 ) {
     val glApi = remember { GlApiImpl() }
@@ -50,8 +54,10 @@ internal actual fun BigBox3DGlSurface(
                 setRenderer(object : GLSurfaceView.Renderer {
                     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) =
                         renderer.onSurfaceCreated(glApi)
+
                     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) =
                         renderer.onSurfaceChanged(glApi, width, height)
+
                     override fun onDrawFrame(gl: GL10?) =
                         renderer.onDrawFrame(glApi)
                 })
@@ -64,12 +70,14 @@ internal actual fun BigBox3DGlSurface(
         update = { glView ->
             if (paused) glView.onPause() else glView.onResume()
             glView.queueEvent {
-                renderer.glossLevel        = glossLevel
-                renderer.rotationSpeed     = rotationSpeed
-                renderer.shadowOpacity     = shadowOpacity
-                renderer.shadowFade        = shadowFade
+                renderer.glossLevel = glossLevel
+                renderer.rotationSpeed = rotationSpeed
+                renderer.shadowOpacity = shadowOpacity
+                renderer.shadowFade = shadowFade
                 renderer.shadowXOffsetRatio = shadowXOffsetRatio
                 renderer.shadowYOffsetRatio = shadowYOffsetRatio
+                renderer.ambientBrightness = ambientBrightness
+                renderer.brightness = brightness
             }
         },
         modifier = modifier.pointerInput(Unit) {
@@ -133,7 +141,8 @@ internal actual fun BigBox3DGlSurface(
 
                     if (claimedRotation) {
                         change.consume()
-                        val fdx = dx; val fdy = dy
+                        val fdx = dx;
+                        val fdy = dy
                         glViewRef.value?.queueEvent { renderer.handleTouchDrag(fdx, fdy) }
                         prevX = change.position.x
                         prevY = change.position.y

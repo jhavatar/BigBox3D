@@ -14,7 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
+import io.chthonic.bigbox3d.core.Brightness
 import io.chthonic.bigbox3d.core.CuboidRenderer
 import io.chthonic.bigbox3d.core.GlApiImpl
 import io.chthonic.bigbox3d.core.GlossLevel
@@ -34,6 +36,8 @@ internal actual fun BigBox3DGlSurface(
     shadowFade: ShadowFade,
     shadowXOffsetRatio: Float,
     shadowYOffsetRatio: Float,
+    ambientBrightness: AmbientBrightness,
+    brightness: Brightness,
     onGestureActive: (Boolean) -> Unit,
 ) {
     val glCanvas = remember { jsCreateCanvas() }
@@ -47,6 +51,8 @@ internal actual fun BigBox3DGlSurface(
     renderer.shadowFade         = shadowFade
     renderer.shadowXOffsetRatio = shadowXOffsetRatio
     renderer.shadowYOffsetRatio = shadowYOffsetRatio
+    renderer.ambientBrightness  = ambientBrightness
+    renderer.brightness         = brightness
 
     // In Compose MP 1.10.x, DisposableEffect runs BEFORE the first onGloballyPositioned.
     // Setting canvas.width/height (jsResizeCanvas) resets the WebGL context, wiping all

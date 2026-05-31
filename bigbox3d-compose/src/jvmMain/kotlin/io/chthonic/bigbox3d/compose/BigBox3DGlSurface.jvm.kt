@@ -24,7 +24,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
+import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
+import io.chthonic.bigbox3d.core.Brightness
 import io.chthonic.bigbox3d.core.CuboidRenderer
 import io.chthonic.bigbox3d.core.GlApiImpl
 import io.chthonic.bigbox3d.core.GlossLevel
@@ -97,17 +99,21 @@ internal actual fun BigBox3DGlSurface(
     shadowFade: ShadowFade,
     shadowXOffsetRatio: Float,
     shadowYOffsetRatio: Float,
+    ambientBrightness: AmbientBrightness,
+    brightness: Brightness,
     onGestureActive: (Boolean) -> Unit,
 ) {
     val glApi = remember { GlApiImpl() }
     val renderer = remember(atlas) { CuboidRenderer(atlas) }
 
-    renderer.rotationSpeed = rotationSpeed
-    renderer.glossLevel = glossLevel
-    renderer.shadowOpacity = shadowOpacity
-    renderer.shadowFade = shadowFade
+    renderer.rotationSpeed      = rotationSpeed
+    renderer.glossLevel         = glossLevel
+    renderer.shadowOpacity      = shadowOpacity
+    renderer.shadowFade         = shadowFade
     renderer.shadowXOffsetRatio = shadowXOffsetRatio
     renderer.shadowYOffsetRatio = shadowYOffsetRatio
+    renderer.ambientBrightness  = ambientBrightness
+    renderer.brightness         = brightness
 
     var size by remember { mutableStateOf(IntSize.Zero) }
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
