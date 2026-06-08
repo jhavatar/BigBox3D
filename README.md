@@ -1,4 +1,4 @@
-# BigBox3d
+# BigBox3D
 
 Kotlin Compose UI widget that renders the big box of a PC game in 3D, e.g. 
 <video src="https://github.com/user-attachments/assets/2cbbfdf6-3f5a-484d-b3a9-fb9f471dd593" controls></video>
