@@ -115,6 +115,12 @@ internal actual fun BigBox3DGlSurface(
                         renderer.onSurfaceChanged(glApi, pw, ph)
                         glReady.value = true
                     }
+                } else {
+                    // The composable collapsed to zero size (e.g. BigBox3DProgress fading
+                    // out). Hide the canvas instead of leaving it frozen at its last
+                    // nonzero position/size — otherwise it can become a visible "ghost"
+                    // if an ancestor is later resized/repositioned and no longer overlaps it.
+                    jsStyleCanvas(glCanvas, x, y, 0, 0)
                 }
             }
             .pointerInput(Unit) {
