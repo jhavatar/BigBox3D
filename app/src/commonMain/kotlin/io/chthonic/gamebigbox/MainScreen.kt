@@ -275,7 +275,8 @@ fun MainScreen() {
                         shadowYOffsetRatio = shadowY,
                         onGestureActive = { gestureStates[idx] = it },
                         onLoadingChange = progressPool.onLoadingChange(idx),
-                        onFrontLuminance = { p -> println("luminance = $p for ${entry.texture.boxKey()}") }
+                        onFrontLuminance = { p -> println("luminance = $p for ${entry.texture.boxKey()}") },
+                        imageUrlResolver = ::resolveExternalUrl,
                     )
                     progressPool.LoadingOverlay(idx)
                 }

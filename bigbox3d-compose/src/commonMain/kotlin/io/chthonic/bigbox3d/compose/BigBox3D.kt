@@ -86,6 +86,9 @@ private fun putAtlasInCache(key: String, atlas: BoxTextureAtlas, luminance: Floa
  *   `< 15` very dark (e.g. black game art), `15–30` dark, `30–50` mid-range, `> 50` light/bright
  * @param onGestureActive fires when a touch gesture starts or ends
  * @param onLoadingChange fires with `true` when atlas loading begins and `false` when it completes or the composable leaves composition
+ * @param imageUrlResolver applied to each [BoxTextureUrls] face URL before fetching — use to route
+ *   through a CORS proxy or rewrite to a same-origin path. Defaults to the identity function (no
+ *   rewriting); ignored for [BoxRawImages].
  */
 @Composable
 fun BigBox3D(
@@ -103,6 +106,7 @@ fun BigBox3D(
     onFrontLuminance: ((Float) -> Unit)? = null,
     onGestureActive: (Boolean) -> Unit = {},
     onLoadingChange: (Boolean) -> Unit = {},
+    imageUrlResolver: (String) -> String = { it },
 ) {
     val platformContext = LocalPlatformContext.current
 
@@ -137,7 +141,7 @@ fun BigBox3D(
             // the source image ByteArrays for GC before the coroutine scope ends.
             var rawImages: List<RawImage> = when (textures) {
                 is BoxTextureUrls -> withContext(ioDispatcher) {
-                    textures.toRawImages { url -> loadRawImageFromUrl(url, platformContext) }
+                    textures.toRawImages { url -> loadRawImageFromUrl(imageUrlResolver(url), platformContext) }
                 }
 
                 is BoxRawImages -> listOf(

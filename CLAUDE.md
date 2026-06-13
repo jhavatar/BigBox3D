@@ -106,7 +106,7 @@ src/
 # Publish and release both libraries to Maven Central
 ./gradlew publishAndReleaseToMavenCentral
 
-# Override the version (default: library.version in libs.versions.toml, currently 1.0.6)
+# Override the version (default: library.version in libs.versions.toml, currently 1.0.8)
 ./gradlew publishAndReleaseToMavenCentral -Plibrary.version=1.1.0
 ```
 
@@ -123,7 +123,7 @@ Maven Central is **immutable** — once a version is published it cannot be over
 
 ```kotlin
 // No extra repo URL needed — Maven Central is in the default search path
-implementation("io.github.jhavatar:bigbox3d-compose:1.0.6")
+implementation("io.github.jhavatar:bigbox3d-compose:1.0.8")
 // bigbox3d-core is resolved automatically as a transitive dependency
 ```
 
@@ -158,7 +158,7 @@ KMP Compose widget layer. Depends on `:bigbox3d-core` via `api()` (so core types
 
 | Source set | Contents |
 |------------|----------|
-| `commonMain` | \`BigBox3D\` composable (public API — takes \`textures: BoxTexture\`, \`ambientBrightness: AmbientBrightness = NORMAL\`, \`brightness: Brightness = AUTO\`, \`onFrontLuminance: ((Float) -> Unit)? = null\`, \`paused: Boolean = false\`); \`BigBox3DProgress\` composable (loading-indicator wrapper — see below); `BoxTexture` sealed interface with `boxKey(): String` (stable LazyColumn key); `BoxTextureUrls : BoxTexture` (URL-based, supports `SideSource`/`CapSource`); `BoxRawImages : BoxTexture` (pre-loaded faces, for bundled resources — see `loadRawImageFromBytes`); `SideSource` sealed interface (`Explicit`, `Spine`, `ColorFill`, `Cardboard(source: FaceSource)`); `CapSource` sealed interface (`Explicit`, `ColorFill`, `Cardboard(source: FaceSource)`); `FaceSource` enum shared by `Cardboard` — `SideSource.FaceSource { Front, Back }`, `CapSource.FaceSource { Spine, Front, Back }` (Spine falls back to Front when no spine URL is present); `RawImageExt.kt` (`edgeAverageColor()` — averages edge pixels of a `RawImage` to infer background color); `expect BigBox3DGlSurface`; `expect loadRawImageFromUrl`; `expect loadRawImageFromBytes`; `expect val ioDispatcher` |
+| `commonMain` | \`BigBox3D\` composable (public API — takes \`textures: BoxTexture\`, \`ambientBrightness: AmbientBrightness = NORMAL\`, \`brightness: Brightness = AUTO\`, \`onFrontLuminance: ((Float) -> Unit)? = null\`, \`paused: Boolean = false\`, \`imageUrlResolver: (String) -> String = { it }\` — applied to each \`BoxTextureUrls\` face URL before \`loadRawImageFromUrl\` fetches it; identity by default, ignored for \`BoxRawImages\`); \`BigBox3DProgress\` composable (loading-indicator wrapper — see below); `BoxTexture` sealed interface with `boxKey(): String` (stable LazyColumn key); `BoxTextureUrls : BoxTexture` (URL-based, supports `SideSource`/`CapSource`); `BoxRawImages : BoxTexture` (pre-loaded faces, for bundled resources — see `loadRawImageFromBytes`); `SideSource` sealed interface (`Explicit`, `Spine`, `ColorFill`, `Cardboard(source: FaceSource)`); `CapSource` sealed interface (`Explicit`, `ColorFill`, `Cardboard(source: FaceSource)`); `FaceSource` enum shared by `Cardboard` — `SideSource.FaceSource { Front, Back }`, `CapSource.FaceSource { Spine, Front, Back }` (Spine falls back to Front when no spine URL is present); `RawImageExt.kt` (`edgeAverageColor()` — averages edge pixels of a `RawImage` to infer background color); `expect BigBox3DGlSurface`; `expect loadRawImageFromUrl`; `expect loadRawImageFromBytes`; `expect val ioDispatcher` |
 | `androidMain` | `actual BigBox3DGlSurface` — `GLSurfaceView` in `AndroidView`, bridges `Renderer` callbacks to `CuboidRenderer`; gestures handled via `Modifier.pointerInput` (horizontal drag = rotate, vertical passes to `LazyColumn` for scroll, pinch = zoom); `actual loadRawImageFromUrl` — Coil 3 → `BitmapImage` → ARGB→RGBA extraction; `actual ioDispatcher = Dispatchers.IO`; internet permission in manifest |
 | `wasmJsMain` | `actual BigBox3DGlSurface` — creates a WebGL `<canvas>` appended to `<html>` (not `<body>`) with `position:fixed; pointer-events:none; z-index:1`; gestures handled via `Modifier.pointerInput` on the Box (drag = rotate; scroll = LazyColumn; scroll over stationary box = zoom via 300 ms debounce); `onSurfaceCreated` called after first `jsResizeCanvas` due to WebGL context-reset behaviour; `localToWindow(Offset.Zero)` + `coords.size` gives full composable dimensions during scroll; `actual loadRawImageFromUrl` — browser `fetch` → `createImageBitmap` → `OffscreenCanvas` → `getImageData` pixels; `actual ioDispatcher = Dispatchers.Default` |
 | `jvmMain` | `actual BigBox3DGlSurface` — CGL headless context (macOS) or GLFW hidden window (Linux/Windows) → FBO → `glReadPixels` → Y-flip → `BufferedImage.toComposeImageBitmap()`, displayed via Compose `Image`; render loop via `withFrameNanos`; drag/scroll gestures via `pointerInput`; VAO bound before `onSurfaceCreated`; `actual loadRawImageFromUrl` — Skiko `Image.makeFromEncoded` (handles WebP) → `Surface` → pixel readback; `actual ioDispatcher = Dispatchers.IO` |
@@ -218,6 +218,7 @@ BigBox3DProgress(textures = spinnerTextures, visible = isLoading)
 
 **Web image loading (`ImageLoading.wasmJs.kt`):**
 - Entirely browser-native: `fetch` → `.blob()` → `createImageBitmap` → `OffscreenCanvas` → `getImageData`. Also supports `data:` URLs (used by `loadRawImageFromBytes` on wasmJs).
+- `fetch`es the URL exactly as given — **no app-specific URL rewriting**. Consumers whose image URLs are cross-origin (and lack CORS headers) must rewrite them to a same-origin/CORS-proxied URL themselves via `BigBox3D`'s `imageUrlResolver` parameter (see `:app`'s `resolveExternalUrl` below for an example). Prior to 1.0.8 this rewriting was hardcoded into the library itself (`/api/proxy?url=...` on non-localhost hosts), which broke consumers with their own same-origin proxying.
 - Promise-to-coroutine bridge via `suspendCancellableCoroutine` + `js("promise.then(onFulfilled, onRejected)")`
 - Pixel extraction packs 4 RGBA bytes into one `Int` per Wasm→JS bridge crossing (`jsGetPixelRgba`) — 1M crossings for a 1024×1024 image instead of 4M. JS `<<` operates on signed 32-bit ints; `ushr` in Kotlin extracts unsigned bytes correctly.
 - No Coil dependency on web
@@ -228,11 +229,12 @@ BigBox3DProgress(textures = spinnerTextures, visible = isLoading)
 
 | Source set | Contents |
 |------------|----------|
-| `commonMain` | `MainScreen`, `SettingsPanel`, and all UI composables — shared between Android, web, and desktop. Uses `compose.components.resources` for bundled images in `composeResources/files/`. `LazyColumn` items use `BoxTexture.boxKey()` as stable keys to prevent state reuse when the list is dynamically prepended. `BigBox3DProgressPool` — tracks which items are loading and renders `BigBox3DProgress` directly inside each item's `LoadingOverlay` (no `movableContentOf` — atlas reuse via `BigBox3D`'s cache); exposes `rememberBigBox3DProgressPool`, `ParkingSpots()` (no-op), and `LoadingOverlay(idx)`. |
-| `androidMain` | `MainActivity` (`ComponentActivity` entry point, wraps `MainScreen` in `GameBigBoxTheme`); `@Preview` composable; `GameBigBoxTheme` with Android dynamic colors |
-| `wasmJsMain` | `main()` — web entry point using `ComposeViewport(document.body!!)` wrapped in `MaterialTheme` |
+| `commonMain` | `MainScreen`, `SettingsPanel`, and all UI composables — shared between Android, web, and desktop. Uses `compose.components.resources` for bundled images in `composeResources/files/`. `LazyColumn` items use `BoxTexture.boxKey()` as stable keys to prevent state reuse when the list is dynamically prepended. `BigBox3DProgressPool` — tracks which items are loading and renders `BigBox3DProgress` directly inside each item's `LoadingOverlay` (no `movableContentOf` — atlas reuse via `BigBox3D`'s cache); exposes `rememberBigBox3DProgressPool`, `ParkingSpots()` (no-op), and `LoadingOverlay(idx)`. `UrlResolving.kt` declares `expect fun resolveExternalUrl(url: String): String`, passed to `BigBox3D(..., imageUrlResolver = ::resolveExternalUrl)` for the `bigboxcollection.com`-hosted demo textures. |
+| `androidMain` | `MainActivity` (`ComponentActivity` entry point, wraps `MainScreen` in `GameBigBoxTheme`); `@Preview` composable; `GameBigBoxTheme` with Android dynamic colors; `UrlResolving.android.kt` — `actual resolveExternalUrl = url` (identity; CORS doesn't apply off-browser) |
+| `wasmJsMain` | `main()` — web entry point using `ComposeViewport(document.body!!)` wrapped in `MaterialTheme`. `UrlResolving.wasmJs.kt` — `actual resolveExternalUrl`: on `localhost` (dev), returns `URL(url).pathname` so the request stays same-origin and is forwarded by the webpack dev-server proxy (`devServerProxy.js`, `/images` → `https://bigboxcollection.com`); otherwise rewrites to `/api/proxy?url=<encoded url>`, a CORS proxy endpoint provided by the deployed demo's hosting |
 | `wasmJsMain/resources` | `index.html` — loads `app.js` (Skiko is bundled into `app.js` by webpack in Compose MP 1.10.3; the old separate `skiko.js` tag was removed) |
-| `jvmMain` | `main()` — desktop entry point using `singleWindowApplication` (520×900 dp) wrapped in `MaterialTheme`; LWJGL native jars for all platforms added as `runtimeOnly`; `compose.desktop.currentOs` provides the Compose Desktop runtime |
+| `jvmMain` | `main()` — desktop entry point using `singleWindowApplication` (520×900 dp) wrapped in `MaterialTheme`; LWJGL native jars for all platforms added as `runtimeOnly`; `compose.desktop.currentOs` provides the Compose Desktop runtime; `UrlResolving.jvm.kt` — `actual resolveExternalUrl = url` (identity) |
+| `iosMain` | `UrlResolving.ios.kt` — `actual resolveExternalUrl = url` (identity) |
 
 ### `:opengl3` (legacy)
 

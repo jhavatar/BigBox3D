@@ -8,7 +8,7 @@ KMP library with targets (currently): Android, Web, JVM/Desktop, iOS. See more i
 ## KMP library usage
 
 ```kotlin
-implementation("io.github.jhavatar:bigbox3d-compose:1.0.6")
+implementation("io.github.jhavatar:bigbox3d-compose:1.0.8")
 ```
 
 **From URLs** (loaded at runtime):
@@ -36,6 +36,9 @@ BigBox3D(
     brightness = Brightness.AUTO,                  // AUTO / DARK / NORMAL / BOOST / STRONG_BOOST — pre-lighting multiplier; AUTO detects from front face luminance
     onFrontLuminance = { pct -> /* 0–100: <15 very dark, 15–30 dark, 30–50 mid, >50 light */ },
     onLoadingChange = { isLoading -> /* fires true while atlas loads, false when ready */ },
+    // Optional: rewrite each face URL before fetching — e.g. route through a same-origin
+    // proxy or CORS proxy on web. Defaults to the identity function (fetched as-is).
+    // imageUrlResolver = { url -> url },
 )
 ```
 

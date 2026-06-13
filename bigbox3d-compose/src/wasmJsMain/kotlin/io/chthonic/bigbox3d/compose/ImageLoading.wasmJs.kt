@@ -4,7 +4,6 @@ package io.chthonic.bigbox3d.compose
 
 import coil3.PlatformContext
 import io.chthonic.bigbox3d.core.RawImage
-import io.chthonic.bigbox3d.network.resolveExternalUrl
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -12,7 +11,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 internal actual suspend fun loadRawImageFromUrl(url: String, context: PlatformContext): RawImage =
-    imageDataToRawImage(fetchImageData(resolveExternalUrl(url)))
+    imageDataToRawImage(fetchImageData(url))
 
 @OptIn(ExperimentalEncodingApi::class)
 actual suspend fun loadRawImageFromBytes(bytes: ByteArray): RawImage {
