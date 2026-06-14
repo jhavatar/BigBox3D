@@ -5,6 +5,9 @@ Kotlin Compose UI widget that renders the big box of a PC game in 3D, e.g.
 
 KMP library with targets (currently): Android, Web, JVM/Desktop, iOS. See more info in CLAUDE.md.
 
+## Used In
+- [Big Box Chaser](https://bigboxchaser.com) — A personal catalog for your PC big box game collection
+
 ## KMP library usage
 
 ```kotlin
