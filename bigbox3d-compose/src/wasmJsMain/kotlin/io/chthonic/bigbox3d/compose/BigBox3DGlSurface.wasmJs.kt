@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import kotlin.math.roundToInt
 import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
 import io.chthonic.bigbox3d.core.Brightness
@@ -75,6 +76,15 @@ internal actual fun BigBox3DGlSurface(
         onDispose {
             if (glReady.value) renderer.release(glApi)
             glReady.value = false
+            // Explicitly release the WebGL2 context rather than relying on GC to reclaim it
+            // once the canvas is unreferenced. Chrome caps concurrent WebGL contexts per page
+            // (16 by default) — a LazyColumn with many BigBox3D items each holding their own
+            // context can exceed that during fast scroll, forcing the browser to evict the
+            // oldest context to free resources. If that happens to be the main Compose/Skiko
+            // canvas's own context (also WebGL-backed), the entire UI goes blank while these
+            // still-alive per-item canvases keep rendering — exactly the "cell backgrounds
+            // disappear after scrolling" symptom.
+            jsLoseContext(glCtx)
             jsRemoveFromParent(glCanvas)
         }
     }
@@ -93,15 +103,22 @@ internal actual fun BigBox3DGlSurface(
                 // Use the composable's full size (not the clipped visible area from
                 // boundsInWindow) so the canvas stays 400dp tall while scrolling.
                 // localToWindow gives the true window position even when off-screen (negative y).
+                //
+                // coords.localToWindow()/coords.size are in Compose's raw px unit, which on web
+                // already bakes in devicePixelRatio (same as the backing Skia canvas: a 2x-DPR
+                // screen has canvas.width/height at 2x its CSS style width/height). canvas.style.*
+                // needs CSS pixels, so divide by dpr for styling; the backing buffer (canvas.width/
+                // height) wants the raw physical pixel count directly, with no further scaling.
+                val dpr = jsDevicePixelRatio()
                 val windowPos = coords.localToWindow(Offset.Zero)
-                val x = windowPos.x.toInt()
-                val y = windowPos.y.toInt()
-                val w = coords.size.width
-                val h = coords.size.height
-                if (w > 0 && h > 0) {
-                    jsStyleCanvas(glCanvas, x, y, w, h)
-                    val dpr = jsDevicePixelRatio()
-                    val pw = (w * dpr).toInt(); val ph = (h * dpr).toInt()
+                val pw = coords.size.width
+                val ph = coords.size.height
+                val cssX = windowPos.x.toCssPx(dpr)
+                val cssY = windowPos.y.toCssPx(dpr)
+                val cssW = pw.toCssPx(dpr)
+                val cssH = ph.toCssPx(dpr)
+                if (pw > 0 && ph > 0) {
+                    jsStyleCanvas(glCanvas, cssX, cssY, cssW, cssH)
                     if (pw != lastPw.value || ph != lastPh.value) {
                         // canvas.width/height reset the WebGL context — release old GL
                         // objects first, then recreate everything after the resize.
@@ -120,7 +137,7 @@ internal actual fun BigBox3DGlSurface(
                     // out). Hide the canvas instead of leaving it frozen at its last
                     // nonzero position/size — otherwise it can become a visible "ghost"
                     // if an ancestor is later resized/repositioned and no longer overlaps it.
-                    jsStyleCanvas(glCanvas, x, y, 0, 0)
+                    jsStyleCanvas(glCanvas, cssX, cssY, 0, 0)
                 }
             }
             .pointerInput(Unit) {
@@ -184,6 +201,15 @@ private fun jsAppendToHtml(canvas: JsAny): Unit = js("""
 private fun jsRemoveFromParent(canvas: JsAny): Unit =
     js("(canvas.parentNode && canvas.parentNode.removeChild(canvas))")
 
+// Forces immediate release of the WebGL2 context via the WEBGL_lose_context extension,
+// rather than waiting for GC to reclaim it once the canvas is unreferenced.
+private fun jsLoseContext(gl: WebGl2Ctx): Unit = js("""
+    (function() {
+        var ext = gl.getExtension('WEBGL_lose_context');
+        if (ext) ext.loseContext();
+    })()
+""")
+
 private fun jsStyleCanvas(canvas: JsAny, x: Int, y: Int, w: Int, h: Int): Unit = js("""
     (canvas.style.left   = x + 'px',
      canvas.style.top    = y + 'px',
@@ -196,3 +222,7 @@ private fun jsResizeCanvas(canvas: JsAny, w: Int, h: Int): Unit =
 
 private fun jsDevicePixelRatio(): Double = js("window.devicePixelRatio || 1.0")
 private fun jsDateNow(): Double = js("Date.now()")
+
+// Converts a Compose raw-px value (already dpr-scaled) to a CSS pixel value for canvas.style.*.
+private fun Float.toCssPx(dpr: Double): Int = (this / dpr).roundToInt()
+private fun Int.toCssPx(dpr: Double): Int = (this / dpr).roundToInt()
