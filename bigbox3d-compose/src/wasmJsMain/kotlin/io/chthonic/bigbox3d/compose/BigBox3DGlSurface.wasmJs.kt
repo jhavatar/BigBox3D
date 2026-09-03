@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import kotlin.math.roundToInt
+import androidx.compose.ui.platform.LocalDensity
 import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
 import io.chthonic.bigbox3d.core.Brightness
@@ -25,6 +25,7 @@ import io.chthonic.bigbox3d.core.RotationSpeed
 import io.chthonic.bigbox3d.core.ShadowFade
 import io.chthonic.bigbox3d.core.ShadowOpacity
 import io.chthonic.bigbox3d.core.WebGl2Ctx
+import kotlin.math.roundToInt
 
 @Composable
 internal actual fun BigBox3DGlSurface(
@@ -45,6 +46,13 @@ internal actual fun BigBox3DGlSurface(
     val glCtx    = remember { jsGetWebGL2Ctx(glCanvas) }
     val glApi    = remember { GlApiImpl(glCtx) }
     val renderer = remember(atlas) { CuboidRenderer(atlas) }
+    // Read Compose's own density rather than window.devicePixelRatio directly: coords.size/
+    // localToWindow() below are computed using THIS density, and on web it's set once when the
+    // page loads and does not live-update if the user changes browser zoom without a refresh.
+    // Using LocalDensity keeps our CSS-pixel conversion structurally unable to drift from
+    // whatever value Compose actually used, instead of trusting two independently-read sources
+    // to happen to agree.
+    val density = LocalDensity.current.density
 
     renderer.rotationSpeed      = rotationSpeed
     renderer.glossLevel         = glossLevel
@@ -105,18 +113,17 @@ internal actual fun BigBox3DGlSurface(
                 // localToWindow gives the true window position even when off-screen (negative y).
                 //
                 // coords.localToWindow()/coords.size are in Compose's raw px unit, which on web
-                // already bakes in devicePixelRatio (same as the backing Skia canvas: a 2x-DPR
+                // already bakes in its density (same as the backing Skia canvas: a 2x-density
                 // screen has canvas.width/height at 2x its CSS style width/height). canvas.style.*
-                // needs CSS pixels, so divide by dpr for styling; the backing buffer (canvas.width/
-                // height) wants the raw physical pixel count directly, with no further scaling.
-                val dpr = jsDevicePixelRatio()
+                // needs CSS pixels, so divide by density for styling; the backing buffer (canvas.
+                // width/height) wants the raw physical pixel count directly, with no further scaling.
                 val windowPos = coords.localToWindow(Offset.Zero)
                 val pw = coords.size.width
                 val ph = coords.size.height
-                val cssX = windowPos.x.toCssPx(dpr)
-                val cssY = windowPos.y.toCssPx(dpr)
-                val cssW = pw.toCssPx(dpr)
-                val cssH = ph.toCssPx(dpr)
+                val cssX = windowPos.x.toCssPx(density)
+                val cssY = windowPos.y.toCssPx(density)
+                val cssW = pw.toCssPx(density)
+                val cssH = ph.toCssPx(density)
                 if (pw > 0 && ph > 0) {
                     jsStyleCanvas(glCanvas, cssX, cssY, cssW, cssH)
                     if (pw != lastPw.value || ph != lastPh.value) {
@@ -220,9 +227,8 @@ private fun jsStyleCanvas(canvas: JsAny, x: Int, y: Int, w: Int, h: Int): Unit =
 private fun jsResizeCanvas(canvas: JsAny, w: Int, h: Int): Unit =
     js("(canvas.width = w, canvas.height = h)")
 
-private fun jsDevicePixelRatio(): Double = js("window.devicePixelRatio || 1.0")
 private fun jsDateNow(): Double = js("Date.now()")
 
-// Converts a Compose raw-px value (already dpr-scaled) to a CSS pixel value for canvas.style.*.
-private fun Float.toCssPx(dpr: Double): Int = (this / dpr).roundToInt()
-private fun Int.toCssPx(dpr: Double): Int = (this / dpr).roundToInt()
+// Converts a Compose raw-px value (already density-scaled) to a CSS pixel value for canvas.style.*.
+private fun Float.toCssPx(density: Float): Int = (this / density).roundToInt()
+private fun Int.toCssPx(density: Float): Int = (this / density).roundToInt()

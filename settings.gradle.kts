@@ -39,6 +39,19 @@ dependencyResolutionManagement {
             metadataSources { artifact() }
             content { includeModule("com.yarnpkg", "yarn") }
         }
+        // Binaryen (wasm-opt), required by wasmJsBrowserProductionWebpack. The Kotlin Gradle
+        // Plugin auto-registers this same ivy repo at the project level (BinaryenSetupTask's
+        // withUrlRepo()), but repositoriesMode.PREFER_SETTINGS ignores project-declared
+        // repositories, so it's silently never used unless also declared here.
+        ivy {
+            name = "Binaryen"
+            setUrl("https://github.com/WebAssembly/binaryen/releases/download")
+            patternLayout {
+                artifact("version_[revision]/binaryen-version_[revision]-[classifier].[ext]")
+            }
+            metadataSources { artifact() }
+            content { includeModule("com.github.webassembly", "binaryen") }
+        }
     }
 }
 
