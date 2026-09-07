@@ -11,7 +11,7 @@ KMP library with targets (currently): Android, Web, JVM/Desktop, iOS. See more i
 ## KMP library usage
 
 ```kotlin
-implementation("io.github.jhavatar:bigbox3d-compose:1.0.8")
+implementation("io.github.jhavatar:bigbox3d-compose:1.0.10")
 ```
 
 **From URLs** (loaded at runtime):
