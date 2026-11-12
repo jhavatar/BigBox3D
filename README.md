@@ -39,6 +39,19 @@ BigBox3D(
     brightness = Brightness.AUTO,                  // AUTO / DARK / NORMAL / BOOST / STRONG_BOOST — pre-lighting multiplier; AUTO detects from front face luminance
     onFrontLuminance = { pct -> /* 0–100: <15 very dark, 15–30 dark, 30–50 mid, >50 light */ },
     onLoadingChange = { isLoading -> /* fires true while atlas loads, false when ready */ },
+    // Gestures. A drag that starts sideways rotates; one that starts up/down is left to a
+    // scrolling parent.
+    dragToRotate = true,          // drag rotates the box
+    pinchToZoom = true,           // two-finger pinch zooms (touch screens)
+    wheelToZoom = true,           // mouse wheel zooms (desktop, web); false leaves the wheel to the page
+    trackpadPinchToZoom = false,  // desktop/web: Ctrl + wheel (a trackpad pinch in browsers) zooms; off by
+                                  // default, as it takes over the browser's page-zoom shortcut over the box
+    // Optional: the app controls the view, e.g. for a zoom slider. Each is applied when it
+    // changes; null leaves it to the gestures.
+    // zoom = zoom,                        // within BigBox3DDefaults.ZoomRange (0.5f..3f)
+    // onZoomChange = { zoom = it },
+    // rotationX = 20f, rotationY = 30f,   // tilt and turn, in degrees
+    // onRotationChange = { x, y -> },     // after a drag (not auto-rotation)
     // Optional: rewrite each face URL before fetching — e.g. route through a same-origin
     // proxy or CORS proxy on web. Defaults to the identity function (fetched as-is).
     // imageUrlResolver = { url -> url },

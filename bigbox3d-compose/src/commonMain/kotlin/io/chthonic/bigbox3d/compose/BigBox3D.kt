@@ -84,6 +84,26 @@ private fun putAtlasInCache(key: String, atlas: BoxTextureAtlas, luminance: Floa
  * @param onFrontLuminance fires once with the front face average luminance (0–100) when the atlas
  *   is ready — use to adapt surrounding UI to the box's brightness. Rough guide:
  *   `< 15` very dark (e.g. black game art), `15–30` dark, `30–50` mid-range, `> 50` light/bright
+ * @param zoom the box's zoom, within [BigBox3DDefaults.ZoomRange]; applied whenever it changes.
+ *   Null (the default) leaves the zoom to the box's own gestures. Pair with [onZoomChange] to keep
+ *   it in step with them, e.g. for a zoom slider.
+ * @param rotationX the box's tilt (up/down) in degrees, kept within its tilt limits (±90°);
+ *   applied whenever it changes. Null leaves the tilt as it is.
+ * @param rotationY the box's turn (left/right) in degrees; applied whenever it changes.
+ *   Auto-rotation ([rotationSpeed]) carries on from the new angle. Null leaves the turn as it is.
+ * @param dragToRotate dragging rotates the box. A drag that starts mostly up or down is never
+ *   taken, so a scrolling parent scrolls.
+ * @param wheelToZoom the mouse wheel zooms the box (desktop and web). The wheel event is not
+ *   consumed, so a scrolling parent scrolls too; on the web, fast wheel ticks are taken as the
+ *   page scrolling and don't zoom. False leaves the wheel to the parent.
+ * @param pinchToZoom a two-finger pinch on a touch screen zooms the box.
+ * @param trackpadPinchToZoom (desktop and web) Ctrl + wheel zooms the box and is consumed.
+ *   Browsers send a trackpad pinch that way, so on the web this makes a trackpad pinch zoom the
+ *   box; it also takes over Ctrl + mouse wheel, otherwise the browser's own page-zoom shortcut.
+ *   Off by default for that reason.
+ * @param onZoomChange fires with the new zoom when a gesture changes it
+ * @param onRotationChange fires with the new tilt and turn (see [rotationX], [rotationY]) when a
+ *   drag rotates the box; not for auto-rotation
  * @param onGestureActive fires when a touch gesture starts or ends
  * @param onLoadingChange fires with `true` when atlas loading begins and `false` when it completes or the composable leaves composition
  * @param imageUrlResolver applied to each [BoxTextureUrls] face URL before fetching — use to route
@@ -103,7 +123,16 @@ fun BigBox3D(
     shadowYOffsetRatio: Float = 0f,
     ambientBrightness: AmbientBrightness = AmbientBrightness.NORMAL,
     brightness: Brightness = Brightness.AUTO,
+    zoom: Float? = null,
+    rotationX: Float? = null,
+    rotationY: Float? = null,
+    dragToRotate: Boolean = true,
+    wheelToZoom: Boolean = true,
+    pinchToZoom: Boolean = true,
+    trackpadPinchToZoom: Boolean = false,
     onFrontLuminance: ((Float) -> Unit)? = null,
+    onZoomChange: (Float) -> Unit = {},
+    onRotationChange: (x: Float, y: Float) -> Unit = { _, _ -> },
     onGestureActive: (Boolean) -> Unit = {},
     onLoadingChange: (Boolean) -> Unit = {},
     imageUrlResolver: (String) -> String = { it },
@@ -218,7 +247,18 @@ fun BigBox3D(
             shadowYOffsetRatio = shadowYOffsetRatio,
             ambientBrightness = ambientBrightness,
             brightness = effectiveBrightness,
-            onGestureActive = onGestureActive,
+            controls = BoxControls(
+                zoom = zoom,
+                rotationX = rotationX,
+                rotationY = rotationY,
+                dragToRotate = dragToRotate,
+                wheelToZoom = wheelToZoom,
+                pinchToZoom = pinchToZoom,
+                trackpadPinchToZoom = trackpadPinchToZoom,
+                onZoomChange = onZoomChange,
+                onRotationChange = onRotationChange,
+                onGestureActive = onGestureActive,
+            ),
         )
         // While loading, occupy the modifier's space but show nothing —
         // the caller overlays loading content at a stable call site outside BigBox3D.

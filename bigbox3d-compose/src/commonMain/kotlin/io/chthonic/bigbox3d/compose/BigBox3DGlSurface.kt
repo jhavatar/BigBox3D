@@ -23,5 +23,5 @@ internal expect fun BigBox3DGlSurface(
     shadowYOffsetRatio: Float,
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
-    onGestureActive: (Boolean) -> Unit,
+    controls: BoxControls,
 )
