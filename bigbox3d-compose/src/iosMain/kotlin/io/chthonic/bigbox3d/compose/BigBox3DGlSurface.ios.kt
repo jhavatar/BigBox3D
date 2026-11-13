@@ -2,15 +2,10 @@
 
 package io.chthonic.bigbox3d.compose
 
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.UIKitView
 import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
@@ -36,8 +31,6 @@ import platform.UIKit.UIColor
 import platform.MetalKit.MTKView
 import platform.MetalKit.MTKViewDelegateProtocol
 import platform.darwin.NSObject
-import kotlin.math.abs
-import kotlin.math.hypot
 
 @Composable
 internal actual fun BigBox3DGlSurface(
@@ -52,7 +45,7 @@ internal actual fun BigBox3DGlSurface(
     shadowYOffsetRatio: Float,
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
-    onGestureActive: (Boolean) -> Unit,
+    controls: BoxControls,
 ) {
     val device = remember {
         MTLCreateSystemDefaultDevice() ?: error("Metal is not available on this device")
@@ -64,7 +57,8 @@ internal actual fun BigBox3DGlSurface(
     val glApi       = remember { GlApiImpl(device, cmdQueue) }
     val renderer    = remember(atlas) { CuboidRenderer(atlas) }
     val delegate    = remember(atlas) { BigBox3DMetalDelegate(glApi, renderer, cmdQueue) }
-    val scaleFactor = remember { mutableStateOf(1f) }
+    // Gestures and drawing both run on the main thread, so the renderer is touched directly.
+    val input       = rememberBoxInput(controls, remember(renderer) { DirectRendererAccess(renderer) })
 
     // Release the previous renderer's GPU handles (VBOs, texture) from glApi when the
     // atlas changes, and when the composable leaves composition. Without this, the old
@@ -117,63 +111,8 @@ internal actual fun BigBox3DGlSurface(
             view.delegate = null
             // GPU resource cleanup (renderer.release) is handled by DisposableEffect.onDispose.
         },
-        modifier = modifier.pointerInput(Unit) {
-            val touchSlop = viewConfiguration.touchSlop
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                var prevX = down.position.x
-                var prevY = down.position.y
-                var gestureActive = false
-
-                while (true) {
-                    val event = awaitPointerEvent()
-                    if (!event.changes.any { it.pressed }) {
-                        if (gestureActive) onGestureActive(false)
-                        break
-                    }
-
-                    // Pinch-to-zoom (two or more fingers)
-                    if (event.changes.size >= 2) {
-                        if (!gestureActive) { gestureActive = true; onGestureActive(true) }
-                        val zoom = event.calculateZoom()
-                        if (zoom != 1f) {
-                            scaleFactor.value = (scaleFactor.value * zoom).coerceIn(0.5f, 3f)
-                            renderer.zoomFactor = scaleFactor.value
-                        }
-                        event.changes.forEach { it.consume() }
-                        var sumX = 0f; var sumY = 0f
-                        event.changes.forEach { sumX += it.position.x; sumY += it.position.y }
-                        val count = event.changes.size
-                        prevX = sumX / count
-                        prevY = sumY / count
-                        continue
-                    }
-
-                    // Single-finger drag
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    val dx = change.position.x - prevX
-                    val dy = change.position.y - prevY
-
-                    if (!gestureActive && hypot(dx, dy) > touchSlop) {
-                        if (abs(dx) >= abs(dy)) {
-                            // Horizontal-dominant → claim for rotation
-                            gestureActive = true
-                            onGestureActive(true)
-                        } else {
-                            // Vertical-dominant → release so LazyColumn can scroll
-                            break
-                        }
-                    }
-
-                    if (gestureActive) {
-                        change.consume()
-                        renderer.handleTouchDrag(dx, dy)
-                        prevX = change.position.x
-                        prevY = change.position.y
-                    }
-                }
-            }
-        },
+        // Shared gestures (BoxGestures.kt); no mouse-wheel handling on iOS.
+        modifier = modifier.boxGestures(input, WheelHandling.NONE),
     )
 }
 

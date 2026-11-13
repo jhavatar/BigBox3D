@@ -6,7 +6,6 @@
 package io.chthonic.bigbox3d.compose
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -17,10 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
@@ -101,10 +98,12 @@ internal actual fun BigBox3DGlSurface(
     shadowYOffsetRatio: Float,
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
-    onGestureActive: (Boolean) -> Unit,
+    controls: BoxControls,
 ) {
     val glApi = remember { GlApiImpl() }
     val renderer = remember(atlas) { CuboidRenderer(atlas) }
+    // As before, gestures set the renderer's fields directly from the UI thread.
+    val input = rememberBoxInput(controls, remember(renderer) { DirectRendererAccess(renderer) })
 
     renderer.rotationSpeed      = rotationSpeed
     renderer.glossLevel         = glossLevel
@@ -117,7 +116,6 @@ internal actual fun BigBox3DGlSurface(
 
     var size by remember { mutableStateOf(IntSize.Zero) }
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
-    val scaleFactor = remember { mutableStateOf(1f) }
 
     val ctx = remember { GlContext() }
 
@@ -157,30 +155,8 @@ internal actual fun BigBox3DGlSurface(
     Box(
         modifier = modifier
             .onSizeChanged { size = it }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { onGestureActive(true) },
-                    onDragEnd = { onGestureActive(false) },
-                    onDragCancel = { onGestureActive(false) },
-                ) { _, dragAmount ->
-                    renderer.handleTouchDrag(dragAmount.x, dragAmount.y)
-                }
-            }
-            .pointerInput(scaleFactor) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val scrollY =
-                            event.changes.fold(Offset.Zero) { acc, c -> acc + c.scrollDelta }.y
-                        if (scrollY != 0f) {
-                            scaleFactor.value =
-                                (scaleFactor.value * if (scrollY > 0) 0.9f else 1.1f)
-                                    .coerceIn(0.5f, 3f)
-                            renderer.zoomFactor = scaleFactor.value
-                        }
-                    }
-                }
-            },
+            // Shared gestures (BoxGestures.kt); the wheel zooms on every tick.
+            .boxGestures(input, WheelHandling.ZOOM),
     ) {
         frame?.let {
             Image(

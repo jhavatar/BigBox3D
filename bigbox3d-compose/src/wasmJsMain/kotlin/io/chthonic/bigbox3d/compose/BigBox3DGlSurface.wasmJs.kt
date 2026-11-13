@@ -2,7 +2,6 @@
 
 package io.chthonic.bigbox3d.compose
 
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -12,7 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import io.chthonic.bigbox3d.core.AmbientBrightness
@@ -40,12 +38,14 @@ internal actual fun BigBox3DGlSurface(
     shadowYOffsetRatio: Float,
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
-    onGestureActive: (Boolean) -> Unit,
+    controls: BoxControls,
 ) {
     val glCanvas = remember { jsCreateCanvas() }
     val glCtx    = remember { jsGetWebGL2Ctx(glCanvas) }
     val glApi    = remember { GlApiImpl(glCtx) }
     val renderer = remember(atlas) { CuboidRenderer(atlas) }
+    // Gestures and drawing both run on the browser's main thread.
+    val input    = rememberBoxInput(controls, remember(renderer) { DirectRendererAccess(renderer) })
     // Read Compose's own density rather than window.devicePixelRatio directly: coords.size/
     // localToWindow() below are computed using THIS density, and on web it's set once when the
     // page loads and does not live-update if the user changes browser zoom without a refresh.
@@ -73,8 +73,8 @@ internal actual fun BigBox3DGlSurface(
     // bug where position:fixed children have offsetWidth=0 and are invisible.
     //
     // The canvas uses pointer-events:none so all pointer events pass through to Compose.
-    // Gestures are handled by Modifier.pointerInput on the Box below, which lets the
-    // LazyColumn scroll freely and lets detectDragGestures claim the drag for rotation.
+    // Gestures are handled by boxGestures on the Box below (BoxGestures.kt): a sideways
+    // drag rotates, an up/down one is left to the scrolling parent.
     val glReady = remember { mutableStateOf(false) }
     val lastPw  = remember { mutableStateOf(0) }
     val lastPh  = remember { mutableStateOf(0) }
@@ -147,45 +147,8 @@ internal actual fun BigBox3DGlSurface(
                     jsStyleCanvas(glCanvas, cssX, cssY, 0, 0)
                 }
             }
-            .pointerInput(Unit) {
-                // Drag to rotate. detectDragGestures claims the gesture so the
-                // LazyColumn doesn't scroll while rotating.
-                detectDragGestures(
-                    onDragStart  = { onGestureActive(true) },
-                    onDragEnd    = { onGestureActive(false) },
-                    onDragCancel = { onGestureActive(false) },
-                ) { _, dragAmount ->
-                    renderer.handleTouchDrag(dragAmount.x, dragAmount.y)
-                }
-            }
-            .pointerInput(Unit) {
-                // Scroll-wheel zoom with list-scroll detection via timestamp:
-                // - If two scroll events arrive within 300 ms the list is "in motion"
-                //   and zoom is suppressed.
-                // - Once scroll is idle for 300 ms the next wheel tick zooms.
-                // The event is never consumed so LazyColumn always receives it.
-                // Using a timestamp avoids allocating a new coroutine on every scroll tick.
-                var scaleFactor = 1f
-                var lastScrollMs = 0.0
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val scrollY = event.changes.fold(Offset.Zero) { acc, c ->
-                            acc + c.scrollDelta
-                        }.y
-                        if (scrollY != 0f) {
-                            val now = jsDateNow()
-                            val listScrolling = (now - lastScrollMs) < 300.0
-                            lastScrollMs = now
-                            if (!listScrolling) {
-                                scaleFactor = (scaleFactor * if (scrollY > 0) 0.9f else 1.1f)
-                                    .coerceIn(0.5f, 3f)
-                                renderer.zoomFactor = scaleFactor
-                            }
-                        }
-                    }
-                }
-            }
+            // Wheel zoom skips fast ticks (the page scrolling), as before.
+            .boxGestures(input, WheelHandling.ZOOM_UNLESS_SCROLLING)
     )
 }
 
@@ -226,8 +189,6 @@ private fun jsStyleCanvas(canvas: JsAny, x: Int, y: Int, w: Int, h: Int): Unit =
 
 private fun jsResizeCanvas(canvas: JsAny, w: Int, h: Int): Unit =
     js("(canvas.width = w, canvas.height = h)")
-
-private fun jsDateNow(): Double = js("Date.now()")
 
 // Converts a Compose raw-px value (already density-scaled) to a CSS pixel value for canvas.style.*.
 private fun Float.toCssPx(density: Float): Int = (this / density).roundToInt()

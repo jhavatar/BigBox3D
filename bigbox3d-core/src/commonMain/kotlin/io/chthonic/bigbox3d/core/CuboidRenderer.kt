@@ -87,6 +87,18 @@ class CuboidRenderer(private val atlas: BoxTextureAtlas) {
         )
     }
 
+    /** The box's tilt (up/down) in degrees: within ±90°, or ±7° when the atlas doesn't support full tilt. */
+    val rotationX: Float get() = angleX
+
+    /** The box's turn (left/right) in degrees, from 0 up to (not including) 360. */
+    val rotationY: Float get() = angleY
+
+    /** Sets the box's angles: [x] is kept within the tilt limits, [y] is wrapped into 0–360. */
+    fun setRotation(x: Float, y: Float) {
+        angleX = clampTilt(x)
+        angleY = wrapTurn(y)
+    }
+
     fun handleTouchDrag(deltaX: Float, deltaY: Float) = rotate(deltaX, deltaY)
 
     fun release(gl: GlApi) {
@@ -95,9 +107,14 @@ class CuboidRenderer(private val atlas: BoxTextureAtlas) {
     }
 
     private fun rotate(deltaX: Float, deltaY: Float) {
-        angleX = (angleX + deltaY * ROTATION_SENSITIVITY).let {
-            if (atlas.supportsFullXAxisRotation) it.coerceIn(-90f, 90f) else it.coerceIn(-7f, 7f)
-        }
-        angleY += deltaX * ROTATION_SENSITIVITY
+        angleX = clampTilt(angleX + deltaY * ROTATION_SENSITIVITY)
+        angleY = wrapTurn(angleY + deltaX * ROTATION_SENSITIVITY)
     }
+
+    private fun clampTilt(x: Float): Float =
+        if (atlas.supportsFullXAxisRotation) x.coerceIn(-90f, 90f) else x.coerceIn(-7f, 7f)
+
+    // The turn is periodic, so wrapping it changes nothing on screen; it keeps the reported
+    // angle readable and the float precise as auto-rotation keeps adding to it.
+    private fun wrapTurn(y: Float): Float = ((y % 360f) + 360f) % 360f
 }

@@ -1,15 +1,10 @@
 package io.chthonic.bigbox3d.compose
 
 import android.opengl.GLSurfaceView
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateCentroidSize
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
 import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
@@ -22,8 +17,6 @@ import io.chthonic.bigbox3d.core.ShadowFade
 import io.chthonic.bigbox3d.core.ShadowOpacity
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
-import kotlin.math.abs
-import kotlin.math.hypot
 
 @Composable
 internal actual fun BigBox3DGlSurface(
@@ -38,11 +31,12 @@ internal actual fun BigBox3DGlSurface(
     shadowYOffsetRatio: Float,
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
-    onGestureActive: (Boolean) -> Unit,
+    controls: BoxControls,
 ) {
     val glApi = remember { GlApiImpl() }
     val renderer = remember(atlas) { CuboidRenderer(atlas) }
     val glViewRef = remember { mutableStateOf<GLSurfaceView?>(null) }
+    val input = rememberBoxInput(controls, remember(renderer) { GlThreadRendererAccess(renderer) { glViewRef.value } })
 
     AndroidView(
         factory = { ctx ->
@@ -80,79 +74,41 @@ internal actual fun BigBox3DGlSurface(
                 renderer.brightness = brightness
             }
         },
-        modifier = modifier.pointerInput(Unit) {
-            val touchSlop = viewConfiguration.touchSlop
-            var scaleFactor = 1f
-
-            awaitEachGesture {
-                // ── Wait for the first finger down ─────────────────────────────
-                val down = awaitFirstDown(requireUnconsumed = false)
-                var prevX = down.position.x
-                var prevY = down.position.y
-                var claimedRotation = false
-
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val anyPressed = event.changes.any { it.pressed }
-                    if (!anyPressed) {
-                        if (claimedRotation) onGestureActive(false)
-                        break
-                    }
-
-                    // ── Pinch-to-zoom (two or more fingers) ───────────────────
-                    if (event.changes.size >= 2) {
-                        if (!claimedRotation) {
-                            claimedRotation = true
-                            onGestureActive(true)
-                        }
-                        val zoom = event.calculateZoom()
-                        if (zoom != 1f) {
-                            scaleFactor = (scaleFactor * zoom).coerceIn(0.5f, 3f)
-                            val sf = scaleFactor
-                            glViewRef.value?.queueEvent { renderer.zoomFactor = sf }
-                        }
-                        event.changes.forEach { it.consume() }
-                        // Update prevX/prevY to the centroid so single-touch
-                        // resumption doesn't produce a position jump.
-                        val centroid = event.calculateCentroidSize()
-                        prevX = event.changes.map { it.position.x }.average().toFloat()
-                        prevY = event.changes.map { it.position.y }.average().toFloat()
-                        continue
-                    }
-
-                    // ── Single-finger drag ─────────────────────────────────────
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    val dx = change.position.x - prevX
-                    val dy = change.position.y - prevY
-
-                    if (!claimedRotation) {
-                        val dist = hypot(dx, dy)
-                        if (dist > touchSlop) {
-                            if (abs(dx) >= abs(dy)) {
-                                // Horizontal-dominant → claim for rotation.
-                                claimedRotation = true
-                                onGestureActive(true)
-                            } else {
-                                // Vertical-dominant → release so LazyColumn can scroll.
-                                break
-                            }
-                        }
-                    }
-
-                    if (claimedRotation) {
-                        change.consume()
-                        val fdx = dx;
-                        val fdy = dy
-                        glViewRef.value?.queueEvent { renderer.handleTouchDrag(fdx, fdy) }
-                        prevX = change.position.x
-                        prevY = change.position.y
-                    }
-                }
-            }
-        },
+        // Shared gestures (BoxGestures.kt); no mouse-wheel handling on Android.
+        modifier = modifier.boxGestures(input, WheelHandling.NONE),
         onRelease = { glView ->
             glView.queueEvent { renderer.release(glApi) }
             glView.onPause()
         },
     )
+}
+
+/**
+ * The renderer is drawn on GLSurfaceView's GL thread, so changes go there with queueEvent, and
+ * a drag's new angles come back to the main thread with post. Before the view exists (its GL
+ * thread hasn't started) the renderer is set directly.
+ */
+private class GlThreadRendererAccess(
+    private val renderer: CuboidRenderer,
+    private val glView: () -> GLSurfaceView?,
+) : RendererAccess {
+    private val direct = DirectRendererAccess(renderer)
+
+    override fun setZoom(zoom: Float) {
+        glView()?.queueEvent { direct.setZoom(zoom) } ?: direct.setZoom(zoom)
+    }
+
+    override fun setRotation(x: Float?, y: Float?) {
+        glView()?.queueEvent { direct.setRotation(x, y) } ?: direct.setRotation(x, y)
+    }
+
+    override fun rotateBy(dx: Float, dy: Float, report: (x: Float, y: Float) -> Unit) {
+        val view = glView() ?: return
+        view.queueEvent {
+            renderer.handleTouchDrag(dx, dy)
+            val x = renderer.rotationX
+            val y = renderer.rotationY
+            view.post { report(x, y) }
+        }
+    }
 }

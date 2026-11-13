@@ -18,6 +18,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
@@ -228,60 +230,80 @@ fun MainScreen() {
         val boxes = urlBoxes
         val gestureStates =
             remember(boxes.size) { mutableStateListOf(*Array(boxes.size) { false }) }
-        LazyColumn(
+        Column(
             Modifier
                 .statusBarsPadding()
                 .padding(top = innerPadding.calculateTopPadding())
-                .background(Color.DarkGray)
                 .fillMaxSize(),
-            userScrollEnabled = !gestureStates.any { it },
         ) {
-            items(
-                count = boxes.size,
-                key = { idx -> boxes[idx].texture.boxKey() },
-            ) { idx ->
-                val entry = boxes[idx]
-                Box(
-                    modifier = Modifier
-                        .height(400.dp)
-                        .border(1.dp, Color.Black)
-                        .fillMaxWidth(),
-                ) {
-                    Column(
+            // A solid toolbar above the list, to check that boxes scrolling up stay under it.
+            TopAppBar(
+                title = { Text("BigBox3D demo") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF6A1B9A),
+                    titleContentColor = Color.White,
+                ),
+            )
+            LazyColumn(
+                Modifier
+                    .background(Color.DarkGray)
+                    .fillMaxSize(),
+                userScrollEnabled = !gestureStates.any { it },
+            ) {
+                items(
+                    count = boxes.size,
+                    key = { idx -> boxes[idx].texture.boxKey() },
+                ) { idx ->
+                    val entry = boxes[idx]
+                    // Auto-rotation stops once this box is dragged, pinched or wheel-zoomed; it
+                    // starts again when the item is recreated (scrolled away and back).
+                    var interacted by remember { mutableStateOf(false) }
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .background(Color.Black.copy(alpha = 0.45f))
-                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                            .height(400.dp)
+                            .border(1.dp, Color.Black)
+                            .fillMaxWidth(),
                     ) {
-                        Text(
-                            text = entry.name,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White,
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .background(Color.Black.copy(alpha = 0.45f))
+                                .padding(horizontal = 6.dp, vertical = 3.dp),
+                        ) {
+                            Text(
+                                text = entry.name,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White,
+                            )
+                            Text(
+                                text = "sides: ${entry.sidesLabel}  caps: ${entry.capsLabel}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.8f),
+                            )
+                        }
+                        BigBox3D(
+                            modifier = Modifier.fillMaxSize(),
+                            textures = entry.texture,
+                            rotationSpeed = if (interacted) RotationSpeed.NONE else rotationSpeed,
+                            glossLevel = glossLevel,
+                            shadowOpacity = shadowOpacity,
+                            shadowFade = shadowFade,
+                            shadowXOffsetRatio = shadowX,
+                            shadowYOffsetRatio = shadowY,
+                            onGestureActive = {
+                                gestureStates[idx] = it
+                                if (it) interacted = true
+                            },
+                            onZoomChange = { interacted = true },
+                            onLoadingChange = progressPool.onLoadingChange(idx),
+                            onFrontLuminance = { p -> println("luminance = $p for ${entry.texture.boxKey()}") },
+                            imageUrlResolver = ::resolveExternalUrl,
                         )
-                        Text(
-                            text = "sides: ${entry.sidesLabel}  caps: ${entry.capsLabel}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.8f),
-                        )
+                        progressPool.LoadingOverlay(idx)
                     }
-                    BigBox3D(
-                        modifier = Modifier.fillMaxSize(),
-                        textures = entry.texture,
-                        rotationSpeed = rotationSpeed,
-                        glossLevel = glossLevel,
-                        shadowOpacity = shadowOpacity,
-                        shadowFade = shadowFade,
-                        shadowXOffsetRatio = shadowX,
-                        shadowYOffsetRatio = shadowY,
-                        onGestureActive = { gestureStates[idx] = it },
-                        onLoadingChange = progressPool.onLoadingChange(idx),
-                        onFrontLuminance = { p -> println("luminance = $p for ${entry.texture.boxKey()}") },
-                        imageUrlResolver = ::resolveExternalUrl,
-                    )
-                    progressPool.LoadingOverlay(idx)
                 }
+                item { Spacer(Modifier.height(300.dp)) }
             }
-            item { Spacer(Modifier.height(300.dp)) }
         }
     }
 }
