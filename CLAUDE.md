@@ -106,11 +106,13 @@ src/
 # Publish and release both libraries to Maven Central
 ./gradlew publishAndReleaseToMavenCentral
 
-# Override the version (default: library.version in libs.versions.toml, currently 1.0.8)
-./gradlew publishAndReleaseToMavenCentral -Plibrary.version=1.1.0
+# Override the version (default: library.version in libs.versions.toml, currently 1.2.0)
+./gradlew publishAndReleaseToMavenCentral -Plibrary.version=1.2.1
 ```
 
 Maven Central is **immutable** — once a version is published it cannot be overwritten. Always bump `library.version` before republishing.
+
+The git tag/GitHub release `v1.1.0` (2025-12-28) is the old Android-only library from before KMP, so the KMP libraries went from 1.0.10 to 1.2.0 to keep tag names unique.
 
 ### Troubleshooting
 
@@ -123,7 +125,7 @@ Maven Central is **immutable** — once a version is published it cannot be over
 
 ```kotlin
 // No extra repo URL needed — Maven Central is in the default search path
-implementation("io.github.jhavatar:bigbox3d-compose:1.0.8")
+implementation("io.github.jhavatar:bigbox3d-compose:1.2.0")
 // bigbox3d-core is resolved automatically as a transitive dependency
 ```
 
@@ -327,10 +329,10 @@ Then in Xcode: **Product → Clean Build Folder** (⌘⇧K) → ▶
 - `expect @Composable fun BigBox3DGlSurface` triggers an IDE warning ("has no corresponding expected declaration") — this is a false positive caused by the Compose compiler transforming `@Composable` signatures at the IR level. The build succeeds.
 - Internal class `EquitorialBoxTextureBitmaps` in `:opengl3` contains a typo ("Equitorial") — the public `EquatorialBoxTextureUrls` in that module is spelled correctly. Note: `:bigbox3d-compose` has replaced its own `FullBoxTextureUrls`/`EquatorialBoxTextureUrls` with the composable `BoxTextureUrls` + `SideSource` + `CapSource` types; `:opengl3` retains its own independent hierarchy.
 - The Kotlin/Wasm stdlib's `WebGL2RenderingContext` binding is incomplete (many methods missing). The `WebGl2Ctx` custom `external interface` in `bigbox3d-core:wasmJsMain` works around this.
-- The web `BigBox3DGlSurface` overlays a `position:fixed; pointer-events:none` canvas on `<html>`. Multiple `BigBox3D` widgets produce independent canvases at `z-index:1`. Because `pointer-events:none`, all gestures are routed through Compose's pointer system on the Box placeholder beneath.
+- The web `BigBox3DGlSurface` overlays a `position:fixed; pointer-events:none` canvas on `<html>`. Because it's above the page, Compose content placed over the box (e.g. an app's zoom slider) would be covered: `BigBox3D`'s `webCutouts` (rounded rects in the box's px, from its top-left) are left clear with a CSS `clip-path: path(evenodd, …)` on the canvas (`CanvasCutoutClip`), set from the same layout callback that positions the canvas and only when the cutouts or the canvas size change, so scrolling doesn't touch it. Ignored on Android/iOS; not needed on desktop, where the box is drawn in Compose. Multiple `BigBox3D` widgets produce independent canvases at `z-index:1`. Because `pointer-events:none`, all gestures are routed through Compose's pointer system on the Box placeholder beneath.
 - Gestures are one shared implementation (`BoxGestures.kt`) on every platform, via `Modifier.pointerInput` (on Android on the `AndroidView`, not a native `OnTouchListener`). Horizontal-dominant drags rotate the box; vertical-dominant drags are released to the `LazyColumn` for scroll; pinch zooms. A gesture that has pinched only zooms until every finger is lifted: the finger left down neither rotates nor scrolls (it used to carry on as a drag from the fingers' centre, so lifting one finger turned the box by half the finger gap, often 80–160°). Web and desktop used `detectDragGestures` before, which took drags in any direction, so a vertical swipe starting on the box rotated it instead of scrolling the page. The old `requestDisallowInterceptTouchEvent` approach broke in Compose MP 1.10.3 because Compose's pointer-input scroll system no longer honours it from a native child view.
 - `BackHandler` (collapse bottom sheet on Android back press) was removed from `MainScreen` when it moved to `commonMain`. It can be re-added via an `expect`/`actual` if needed.
-- Pinch-to-zoom now also works on web touch screens (shared gesture code); not yet tried on a real phone browser. Mouse-wheel zoom works when the list is stationary (suppressed during list scroll via a 300 ms debounce).
+- Pinch-to-zoom now also works on web touch screens (shared gesture code), checked in a phone browser. Mouse-wheel zoom works when the list is stationary (suppressed during list scroll via a 300 ms debounce).
 - Desktop/JVM platform consumers must add LWJGL3 native jars as `runtimeOnly` dependencies — the libraries ship only the binding JARs. Required natives: `org.lwjgl:lwjgl:3.4.1:natives-<platform>`, `org.lwjgl:lwjgl-opengl:3.4.1:natives-<platform>`, and `org.lwjgl:lwjgl-glfw:3.4.1:natives-<platform>` (GLFW natives are only needed on Linux/Windows; macOS uses CGL).
 - On macOS, `glfwInit()` crashes with `SIGILL` in `libdispatch.dylib` (`_dispatch_assert_queue_fail`) when called from any non-main thread, including the AWT EDT, because GLFW's macOS path calls HIToolbox's Text Services Manager which asserts the GCD main queue. The JVM implementation bypasses this entirely by using CGL on macOS.
 - **`movableContentOf` crash ("measure is called on a deactivated node"):** Compose Multiplatform 1.10.x has a bug where `movableContentOf` deactivation does not clear `NeedsRemeasure` state from the deactivated nodes. If a layout pass runs before the nodes are fully cleaned up — which fast LazyColumn scroll reliably triggers on Android and iOS — the crash occurs. `BigBox3DProgressPool` no longer uses `movableContentOf`; `BigBox3DProgress` is rendered directly inside each loading item so it scrolls naturally. Atlas reuse is handled by the atlas cache in `BigBox3D.kt` (keyed by `boxKey()`). The `LaunchedEffect(visible) { withFrameNanos { }; layoutVisible = visible }` delay in `BigBox3DProgress.kt` is retained as a safety guard for any future reintroduction of composition-level movement. If a future Compose Multiplatform release fixes the deactivated-node bug, `movableContentOf` can be reconsidered — the git history contains both the pool implementation and a position-tracking workaround that was attempted before settling on the cache approach.

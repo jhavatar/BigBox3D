@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.viewinterop.AndroidView
 import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
@@ -32,6 +33,7 @@ internal actual fun BigBox3DGlSurface(
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
     controls: BoxControls,
+    webCutouts: List<RoundRect>,
 ) {
     val glApi = remember { GlApiImpl() }
     val renderer = remember(atlas) { CuboidRenderer(atlas) }

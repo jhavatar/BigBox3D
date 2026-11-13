@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.viewinterop.UIKitView
 import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
@@ -46,6 +47,7 @@ internal actual fun BigBox3DGlSurface(
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
     controls: BoxControls,
+    webCutouts: List<RoundRect>,
 ) {
     val device = remember {
         MTLCreateSystemDefaultDevice() ?: error("Metal is not available on this device")

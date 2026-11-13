@@ -11,7 +11,7 @@ KMP library with targets (currently): Android, Web, JVM/Desktop, iOS. See more i
 ## KMP library usage
 
 ```kotlin
-implementation("io.github.jhavatar:bigbox3d-compose:1.0.10")
+implementation("io.github.jhavatar:bigbox3d-compose:1.2.0")
 ```
 
 **From URLs** (loaded at runtime):
@@ -46,12 +46,16 @@ BigBox3D(
     wheelToZoom = true,           // mouse wheel zooms (desktop, web); false leaves the wheel to the page
     trackpadPinchToZoom = false,  // desktop/web: Ctrl + wheel (a trackpad pinch in browsers) zooms; off by
                                   // default, as it takes over the browser's page-zoom shortcut over the box
+    onGestureActive = { active -> /* true when a drag or pinch starts (e.g. to stop auto-rotation),
+                                     false when it ends or is cancelled */ },
     // Optional: the app controls the view, e.g. for a zoom slider. Each is applied when it
     // changes; null leaves it to the gestures.
     // zoom = zoom,                        // within BigBox3DDefaults.ZoomRange (0.5f..3f)
     // onZoomChange = { zoom = it },
     // rotationX = 20f, rotationY = 30f,   // tilt and turn, in degrees
     // onRotationChange = { x, y -> },     // after a drag (not auto-rotation)
+    // webCutouts = listOf(sliderRect),    // web: rounded rects (box px) the box is never drawn over,
+    //                                     // for app content placed on top of it
     // Optional: rewrite each face URL before fetching — e.g. route through a same-origin
     // proxy or CORS proxy on web. Defaults to the identity function (fetched as-is).
     // imageUrlResolver = { url -> url },

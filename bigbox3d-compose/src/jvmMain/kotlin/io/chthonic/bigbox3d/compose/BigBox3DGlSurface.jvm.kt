@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -99,6 +100,7 @@ internal actual fun BigBox3DGlSurface(
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
     controls: BoxControls,
+    webCutouts: List<RoundRect>,
 ) {
     val glApi = remember { GlApiImpl() }
     val renderer = remember(atlas) { CuboidRenderer(atlas) }

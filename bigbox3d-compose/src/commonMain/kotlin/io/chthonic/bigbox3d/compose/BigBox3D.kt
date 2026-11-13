@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.RoundRect
 import coil3.compose.LocalPlatformContext
 import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
@@ -102,10 +103,15 @@ private fun putAtlasInCache(key: String, atlas: BoxTextureAtlas, luminance: Floa
  *   Browsers send a trackpad pinch that way, so on the web this makes a trackpad pinch zoom the
  *   box; it also takes over Ctrl + mouse wheel, otherwise the browser's own page-zoom shortcut.
  *   Off by default for that reason.
+ * @param webCutouts (web only) parts of the box's area, in pixels from its top-left corner, where the box
+ *   is never drawn, for app content placed over the box (e.g. a zoom slider). On the web the box
+ *   is drawn on a canvas above the page, so it would cover that content; on desktop the box is
+ *   drawn in the page and content over it shows anyway. Ignored on Android and iOS.
  * @param onZoomChange fires with the new zoom when a gesture changes it
  * @param onRotationChange fires with the new tilt and turn (see [rotationX], [rotationY]) when a
  *   drag rotates the box; not for auto-rotation
- * @param onGestureActive fires when a touch gesture starts or ends
+ * @param onGestureActive fires `true` when a drag or pinch starts and `false` when it ends or is
+ *   cancelled; not for the mouse wheel or a trackpad pinch
  * @param onLoadingChange fires with `true` when atlas loading begins and `false` when it completes or the composable leaves composition
  * @param imageUrlResolver applied to each [BoxTextureUrls] face URL before fetching — use to route
  *   through a CORS proxy or rewrite to a same-origin path. Defaults to the identity function (no
@@ -131,6 +137,7 @@ fun BigBox3D(
     wheelToZoom: Boolean = true,
     pinchToZoom: Boolean = true,
     trackpadPinchToZoom: Boolean = false,
+    webCutouts: List<RoundRect> = emptyList(),
     onFrontLuminance: ((Float) -> Unit)? = null,
     onZoomChange: (Float) -> Unit = {},
     onRotationChange: (x: Float, y: Float) -> Unit = { _, _ -> },
@@ -260,6 +267,7 @@ fun BigBox3D(
                 onRotationChange = onRotationChange,
                 onGestureActive = onGestureActive,
             ),
+            webCutouts = webCutouts,
         )
         // While loading, occupy the modifier's space but show nothing —
         // the caller overlays loading content at a stable call site outside BigBox3D.

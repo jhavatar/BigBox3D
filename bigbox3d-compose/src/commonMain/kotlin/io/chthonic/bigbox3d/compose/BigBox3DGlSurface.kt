@@ -2,6 +2,7 @@ package io.chthonic.bigbox3d.compose
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.RoundRect
 import io.chthonic.bigbox3d.core.AmbientBrightness
 import io.chthonic.bigbox3d.core.BoxTextureAtlas
 import io.chthonic.bigbox3d.core.Brightness
@@ -24,4 +25,5 @@ internal expect fun BigBox3DGlSurface(
     ambientBrightness: AmbientBrightness,
     brightness: Brightness,
     controls: BoxControls,
+    webCutouts: List<RoundRect>,
 )
