@@ -255,6 +255,9 @@ fun MainScreen() {
                     key = { idx -> boxes[idx].texture.boxKey() },
                 ) { idx ->
                     val entry = boxes[idx]
+                    // Auto-rotation stops once this box is dragged, pinched or wheel-zoomed; it
+                    // starts again when the item is recreated (scrolled away and back).
+                    var interacted by remember { mutableStateOf(false) }
                     Box(
                         modifier = Modifier
                             .height(400.dp)
@@ -281,13 +284,17 @@ fun MainScreen() {
                         BigBox3D(
                             modifier = Modifier.fillMaxSize(),
                             textures = entry.texture,
-                            rotationSpeed = rotationSpeed,
+                            rotationSpeed = if (interacted) RotationSpeed.NONE else rotationSpeed,
                             glossLevel = glossLevel,
                             shadowOpacity = shadowOpacity,
                             shadowFade = shadowFade,
                             shadowXOffsetRatio = shadowX,
                             shadowYOffsetRatio = shadowY,
-                            onGestureActive = { gestureStates[idx] = it },
+                            onGestureActive = {
+                                gestureStates[idx] = it
+                                if (it) interacted = true
+                            },
+                            onZoomChange = { interacted = true },
                             onLoadingChange = progressPool.onLoadingChange(idx),
                             onFrontLuminance = { p -> println("luminance = $p for ${entry.texture.boxKey()}") },
                             imageUrlResolver = ::resolveExternalUrl,

@@ -96,7 +96,8 @@ private fun putAtlasInCache(key: String, atlas: BoxTextureAtlas, luminance: Floa
  * @param wheelToZoom the mouse wheel zooms the box (desktop and web). The wheel event is not
  *   consumed, so a scrolling parent scrolls too; on the web, fast wheel ticks are taken as the
  *   page scrolling and don't zoom. False leaves the wheel to the parent.
- * @param pinchToZoom a two-finger pinch on a touch screen zooms the box.
+ * @param pinchToZoom a two-finger pinch on a touch screen zooms the box. A gesture that has
+ *   pinched only zooms until every finger is lifted; it never turns into a rotation.
  * @param trackpadPinchToZoom (desktop and web) Ctrl + wheel zooms the box and is consumed.
  *   Browsers send a trackpad pinch that way, so on the web this makes a trackpad pinch zoom the
  *   box; it also takes over Ctrl + mouse wheel, otherwise the browser's own page-zoom shortcut.

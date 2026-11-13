@@ -42,7 +42,7 @@ BigBox3D(
     // Gestures. A drag that starts sideways rotates; one that starts up/down is left to a
     // scrolling parent.
     dragToRotate = true,          // drag rotates the box
-    pinchToZoom = true,           // two-finger pinch zooms (touch screens)
+    pinchToZoom = true,           // two-finger pinch zooms (touch screens); a pinch never rotates
     wheelToZoom = true,           // mouse wheel zooms (desktop, web); false leaves the wheel to the page
     trackpadPinchToZoom = false,  // desktop/web: Ctrl + wheel (a trackpad pinch in browsers) zooms; off by
                                   // default, as it takes over the browser's page-zoom shortcut over the box

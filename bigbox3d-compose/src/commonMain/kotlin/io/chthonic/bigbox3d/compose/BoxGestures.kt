@@ -155,7 +155,8 @@ internal fun Modifier.boxGestures(input: BoxInput, wheel: WheelHandling): Modifi
 
 /**
  * One finger: a drag that starts mostly sideways rotates the box; one that starts mostly up or
- * down is let go, so a scrolling parent scrolls. Two fingers pinch to zoom.
+ * down is let go, so a scrolling parent scrolls. Two fingers pinch to zoom, and once a gesture
+ * has pinched it never rotates: rotating again takes a new drag.
  */
 private suspend fun PointerInputScope.dragAndPinch(input: BoxInput) {
     val touchSlop = viewConfiguration.touchSlop
@@ -164,6 +165,7 @@ private suspend fun PointerInputScope.dragAndPinch(input: BoxInput) {
         var prevX = down.position.x
         var prevY = down.position.y
         var claimed = false
+        var pinched = false
         try {
             while (true) {
                 val event = awaitPointerEvent()
@@ -175,18 +177,17 @@ private suspend fun PointerInputScope.dragAndPinch(input: BoxInput) {
                         claimed = true
                         controls.onGestureActive(true)
                     }
+                    pinched = true
                     val zoom = event.calculateZoom()
                     if (zoom != 1f) input.zoomBy(zoom)
-                    // Continue a one-finger drag from the fingers' centre, without a jump.
-                    var sumX = 0f
-                    var sumY = 0f
-                    event.changes.forEach {
-                        it.consume()
-                        sumX += it.position.x
-                        sumY += it.position.y
-                    }
-                    prevX = sumX / event.changes.size
-                    prevY = sumY / event.changes.size
+                    event.changes.forEach { it.consume() }
+                    continue
+                }
+
+                // A pinch only zooms: the finger left down after it neither rotates the box nor
+                // scrolls the parent, until every finger is lifted.
+                if (pinched) {
+                    event.changes.forEach { it.consume() }
                     continue
                 }
 
