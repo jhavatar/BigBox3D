@@ -10,7 +10,13 @@ private fun jsHostname(): String = js("window.location.hostname")
 private fun jsUrlPathname(url: String): String = js("new URL(url).pathname")
 private fun jsEncodeURIComponent(url: String): String = js("encodeURIComponent(url)")
 
-private fun isDev(): Boolean = jsHostname() == "localhost"
+// The dev server is reached as localhost on the Mac, or by its local network address (or
+// <name>.local) from another device such as a phone; anything else is the deployed demo.
+private val devHost = Regex(
+    """^(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|.+\.local)$"""
+)
+
+private fun isDev(): Boolean = devHost.matches(jsHostname())
 
 // Dev: the webpack dev server proxies same-path requests (see devServerProxy.js) — strip to
 // the pathname so the fetch stays same-origin. Prod: route through the deployed /api/proxy
